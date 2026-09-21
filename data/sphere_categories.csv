@@ -1,0 +1,11 @@
+code,name,is_active
+foodservice,Общепит,true
+retail,Розничная торговля,true
+household_services,Бытовые услуги,true
+it_digital,IT и цифровые услуги,true
+manufacturing,Производство,true
+construction_repair,Строительство и ремонт,true
+beauty_health,Красота и здоровье,true
+education,Образование,true
+transport_logistics,Транспорт и логистика,true
+other,Прочее,true
