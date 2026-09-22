@@ -1,7 +1,7 @@
 COMPOSE ?= docker compose
 PYTHON ?= PYTHONPATH=src UV_CACHE_DIR=.uv-cache uv run python
 
-.PHONY: build up down restart logs ps migrate seed-demo validate-data import-data test test-unit test-integration lint format typecheck max-smoke webhook-register webhook-list webhook-delete
+.PHONY: build up down restart logs ps migrate seed-demo validate-data import-data test test-unit test-integration lint format typecheck max-smoke webhook-register webhook-list webhook-delete production-setup
 
 build:
 	$(COMPOSE) build
@@ -62,3 +62,6 @@ webhook-list:
 
 webhook-delete:
 	$(PYTHON) -m navigator.entrypoints.webhook delete
+
+production-setup:
+	./scripts/production-setup.sh

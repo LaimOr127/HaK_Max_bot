@@ -77,6 +77,16 @@ docker compose -f compose.yml -f compose.prod.yml up -d --build
 
 `compose.prod.yml` switches MAX to webhook mode, adds Caddy, and does not publish PostgreSQL or Redis ports. Fill `MAX_WEBHOOK_PUBLIC_URL`, `MAX_WEBHOOK_SECRET`, and real secrets before deploy.
 
+For the configured VPS, create an A record for `svadba-2026.ru` pointing to `193.5.251.40`, clone this repository, then run as `root`:
+
+```bash
+git clone https://github.com/LaimOr127/HaK_Max_bot.git benefit-navigator
+cd benefit-navigator
+./scripts/production-setup.sh
+```
+
+The script securely prompts only for `MAX_BOT_TOKEN` and `CADDY_EMAIL`, generates all other runtime secrets in the ignored `.env`, starts production Compose, checks HTTPS health, verifies the MAX token, and registers the webhook.
+
 ## Known Limitations
 
 The bot path is implemented: onboarding, deterministic recommendations, details, checklists, feedback, investor lead capture, webhook/polling transport, idempotency, import, and reminders. A real MAX token and a running Docker daemon are still needed for an external smoke test; Mini App work is deliberately deferred.
