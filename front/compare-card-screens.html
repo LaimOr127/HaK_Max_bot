@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Навигатор льгот — Сравнение и Карточка</title>
+<style>
+  :root{
+    --bg: #F3F5F8;
+    --surface: #FFFFFF;
+    --border: #E7E9EE;
+    --text: #14161A;
+    --muted: #7A7F8A;
+    --accent: #2F6FED;
+    --accent-soft: #EAF1FF;
+    --good: #E7F7EE;
+    --good-text: #1C8A4C;
+    --danger: #E0483E;
+    --radius-lg: 20px;
+    --radius-md: 14px;
+    --radius-sm: 10px;
+    font-family: -apple-system, "SF Pro Text", "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--text);
+    display:flex;
+    justify-content:center;
+    padding: 32px 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .device{
+    width: 390px;
+    background: var(--surface);
+    border-radius: 34px;
+    box-shadow: 0 30px 60px -20px rgba(20,22,26,0.25), 0 0 0 1px rgba(20,22,26,0.04);
+    overflow:hidden;
+    position:relative;
+  }
+  .statusbar{
+    height: 30px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding: 0 22px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .screen{
+    display:none;
+    flex-direction:column;
+    min-height: 620px;
+  }
+  .screen.active{ display:flex; }
+
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    padding: 6px 18px 14px;
+  }
+  .topbar .back{
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    background: var(--bg);
+    display:flex; align-items:center; justify-content:center;
+    font-size: 16px;
+    cursor:pointer;
+    flex-shrink:0;
+    transition: background .15s ease;
+  }
+  .topbar .back:hover{ background: var(--border); }
+  .topbar h1{
+    font-size: 18px;
+    font-weight: 700;
+    margin:0;
+    letter-spacing: -0.01em;
+  }
+  .topbar .hint{
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+
+  .body-scroll{
+    flex:1;
+    overflow-y:auto;
+    padding: 4px 16px 18px;
+  }
+
+  /* ---- Сравнение ---- */
+  .compare-grid{
+    display:flex;
+    gap: 10px;
+  }
+  .compare-col{
+    flex:1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px 12px 12px;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+  .col-close{
+    position:absolute;
+    top: 10px; right: 10px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--bg);
+    color: var(--muted);
+    display:flex; align-items:center; justify-content:center;
+    font-size: 12px;
+    cursor:pointer;
+    border: none;
+    transition: background .15s ease, color .15s ease;
+  }
+  .col-close:hover{ background: #F1D9D7; color: var(--danger); }
+  .col-badge{
+    display:inline-block;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 7px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    margin-bottom: 8px;
+    width: fit-content;
+  }
+  .col-title{
+    font-size: 14.5px;
+    font-weight: 700;
+    line-height: 1.3;
+    min-height: 38px;
+    margin-bottom: 10px;
+    padding-right: 18px;
+  }
+  .attr-row{
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+  }
+  .attr-row:first-of-type{ border-top: none; }
+  .attr-label{
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+  .attr-value{
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .attr-value.win{
+    background: var(--good);
+    color: var(--good-text);
+    padding: 3px 7px;
+    border-radius: 7px;
+    display:inline-block;
+    margin: -3px -7px;
+  }
+  .btn{
+    border:none;
+    border-radius: var(--radius-sm);
+    font-size: 13.5px;
+    font-weight: 700;
+    padding: 11px 12px;
+    cursor:pointer;
+    text-align:center;
+    transition: transform .1s ease, filter .15s ease;
+    width:100%;
+  }
+  .btn:active{ transform: scale(.97); }
+  .btn-primary{ background: var(--accent); color:#fff; }
+  .btn-primary:hover{ filter: brightness(1.06); }
+  .btn-secondary{ background: var(--bg); color: var(--text); }
+  .btn-secondary:hover{ background: var(--border); }
+  .btn-outline{
+    background: transparent;
+    color: var(--accent);
+    border: 1.5px solid var(--accent);
+  }
+  .col-cta{ margin-top: 12px; }
+
+  /* ---- Карточка ---- */
+  .card-badge{
+    display:inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  .card-title{
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+    margin: 0 0 18px;
+  }
+  .section{ margin-bottom: 18px; }
+  .section h4{
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted);
+    margin: 0 0 6px;
+    font-weight: 700;
+  }
+  .section p{
+    font-size: 14.5px;
+    line-height: 1.5;
+    margin:0;
+    color: var(--text);
+  }
+  .doc-list{ list-style:none; margin:0; padding:0; }
+  .doc-list li{
+    display:flex; align-items:flex-start; gap: 9px;
+    font-size: 14px;
+    padding: 6px 0;
+    line-height: 1.4;
+  }
+  .doc-dot{
+    width:6px; height:6px; border-radius:50%;
+    background: var(--accent);
+    margin-top: 7px;
+    flex-shrink:0;
+  }
+  .sum-highlight{
+    background: var(--accent-soft);
+    color: var(--accent);
+    display:inline-block;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 17px;
+    font-weight: 800;
+  }
+
+  .footer-actions{
+    padding: 14px 16px 20px;
+    border-top: 1px solid var(--border);
+    display:flex;
+    gap: 10px;
+    background: var(--surface);
+  }
+  .footer-actions .btn-primary.added{
+    background: var(--good-text);
+  }
+
+  .confirm-bar{
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+    background: #FFF6F5;
+    border: 1px solid #F3D4D1;
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin: 0 16px 12px;
+    font-size: 13px;
+  }
+  .confirm-bar.show{ display:flex; }
+  .confirm-bar span{ color: var(--text); font-weight: 600; }
+  .confirm-actions{ display:flex; gap:6px; flex-shrink:0; }
+  .confirm-actions button{
+    border:none; border-radius: 8px; padding: 6px 10px;
+    font-size: 12px; font-weight:700; cursor:pointer;
+  }
+  .confirm-yes{ background: var(--danger); color:#fff; }
+  .confirm-no{ background: var(--bg); color: var(--text); }
+
+  .toast{
+    position:absolute;
+    left: 16px; right:16px; bottom: 90px;
+    background: #14161A;
+    color:#fff;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    line-height: 1.4;
+    opacity:0;
+    transform: translateY(8px);
+    pointer-events:none;
+    transition: opacity .2s ease, transform .2s ease;
+    box-shadow: 0 12px 24px rgba(0,0,0,.25);
+  }
+  .toast.show{ opacity:1; transform: translateY(0); }
+
+  .compare-note{
+    font-size: 12px;
+    color: var(--muted);
+    text-align:center;
+    margin-top: 14px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="device">
+  <div class="statusbar"><span>13:40</span><span>MAX</span></div>
+
+  <!-- ЭКРАН: СРАВНЕНИЕ -->
+  <div id="screen-compare" class="screen active">
+    <div class="topbar">
+      <div>
+        <h1>Сравнение</h1>
+        <div class="hint">2 меры выбраны из чата</div>
+      </div>
+    </div>
+
+    <div class="body-scroll">
+      <div class="compare-grid">
+        <div class="compare-col" id="col-a">
+          <button class="col-close" onclick="closeColumn('a')" aria-label="Убрать из сравнения">✕</button>
+          <span class="col-badge">Федеральная</span>
+          <div class="col-title">Субсидия на оборудование</div>
+
+          <div class="attr-row">
+            <div class="attr-label">Сумма</div>
+            <div class="attr-value win">До 500 000 ₽</div>
+          </div>
+          <div class="attr-row">
+            <div class="attr-label">Срок рассмотрения</div>
+            <div class="attr-value">30 дней</div>
+          </div>
+          <div class="attr-row">
+            <div class="attr-label">Документов нужно</div>
+            <div class="attr-value">5</div>
+          </div>
+          <div class="attr-row">
+            <div class="attr-label">Кто может подать</div>
+            <div class="attr-value">ИП и ООО, стаж от 6 мес</div>
+          </div>
+
+          <div class="col-cta">
+            <button class="btn btn-primary" onclick="openCard('a')">Подробнее</button>
+          </div>
+        </div>
+
+        <div class="compare-col" id="col-b">
+          <button class="col-close" onclick="closeColumn('b')" aria-label="Убрать из сравнения">✕</button>
+          <span class="col-badge">Региональная</span>
+          <div class="col-title">Льготный микрозаём</div>
+
+          <div class="attr-row">
+            <div class="attr-label">Сумма</div>
+            <div class="attr-value">До 5 000 000 ₽</div>
+          </div>
+          <div class="attr-row">
+            <div class="attr-label">Срок рассмотрения</div>
+            <div class="attr-value win">10 дней</div>
+          </div>
+          <div class="attr-row">
+            <div class="attr-label">Документов нужно</div>
+            <div class="attr-value win">3</div>
+          </div>
+          <div class="attr-row">
+            <div class="attr-label">Кто может подать</div>
+            <div class="attr-value">Любой субъект МСП</div>
+          </div>
+
+          <div class="col-cta">
+            <button class="btn btn-primary" onclick="openCard('b')">Подробнее</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="compare-note">Лучшее значение по каждому параметру подсвечено зелёным</div>
+    </div>
+
+    <div class="toast" id="toast-compare">Уберём эту меру — ищем ещё варианты?</div>
+  </div>
+
+  <!-- ЭКРАН: КАРТОЧКА -->
+  <div id="screen-card" class="screen">
+    <div class="topbar">
+      <div class="back" onclick="backToCompare()">←</div>
+      <div>
+        <h1 id="card-title-top">Карточка меры</h1>
+        <div class="hint">Назад к сравнению</div>
+      </div>
+    </div>
+
+    <div class="body-scroll">
+      <span class="card-badge" id="card-badge">Федеральная мера</span>
+      <h2 class="card-title" id="card-title">Субсидия на оборудование</h2>
+
+      <div class="section">
+        <h4>Сумма поддержки</h4>
+        <div class="sum-highlight" id="card-sum">До 500 000 ₽</div>
+      </div>
+
+      <div class="section">
+        <h4>Что это</h4>
+        <p id="card-what">Компенсация части затрат на покупку оборудования для ведения бизнеса.</p>
+      </div>
+
+      <div class="section">
+        <h4>Кто может получить</h4>
+        <p id="card-who">ИП и ООО из реестра МСП, стаж работы от 6 месяцев.</p>
+      </div>
+
+      <div class="section">
+        <h4>Документы</h4>
+        <ul class="doc-list" id="card-docs">
+          <li><span class="doc-dot"></span>Заявление по форме</li>
+          <li><span class="doc-dot"></span>Копия чеков или договора покупки</li>
+          <li><span class="doc-dot"></span>Выписка из реестра МСП</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="confirm-bar" id="confirm-bar">
+      <span>Убрать из чек-листа?</span>
+      <div class="confirm-actions">
+        <button class="confirm-yes" onclick="removeFromChecklist()">Да, убрать</button>
+        <button class="confirm-no" onclick="hideConfirm()">Отмена</button>
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <button class="btn btn-primary" id="checklist-btn" onclick="toggleChecklist()">Добавить в чек-лист</button>
+      <button class="btn btn-secondary" style="max-width:120px;" onclick="closeApp()">Закрыть</button>
+    </div>
+
+    <div class="toast" id="toast-card"></div>
+  </div>
+
+</div>
+
+<script>
+  const measures = {
+    a: {
+      badge: 'Федеральная мера',
+      title: 'Субсидия на оборудование',
+      sum: 'До 500 000 ₽',
+      what: 'Компенсация части затрат на покупку оборудования для ведения бизнеса.',
+      who: 'ИП и ООО из реестра МСП, стаж работы от 6 месяцев.',
+      docs: [
+        'Заявление по форме',
+        'Копия чеков или договора покупки',
+        'Выписка из реестра МСП'
+      ]
+    },
+    b: {
+      badge: 'Региональная мера',
+      title: 'Льготный микрозаём',
+      sum: 'До 5 000 000 ₽',
+      what: 'Заём по сниженной ставке на развитие бизнеса от регионального фонда поддержки.',
+      who: 'Любой субъект МСП, зарегистрированный в регионе программы.',
+      docs: [
+        'Заявление на заём',
+        'Бизнес-план или обоснование использования средств',
+        'Финансовая отчётность за последний период'
+      ]
+    }
+  };
+
+  let currentCard = 'a';
+  let checklistState = { a: false, b: false };
+
+  function openCard(id){
+    currentCard = id;
+    const m = measures[id];
+    document.getElementById('card-title-top').textContent = m.title;
+    document.getElementById('card-badge').textContent = m.badge;
+    document.getElementById('card-title').textContent = m.title;
+    document.getElementById('card-sum').textContent = m.sum;
+    document.getElementById('card-what').textContent = m.what;
+    document.getElementById('card-who').textContent = m.who;
+    document.getElementById('card-docs').innerHTML = m.docs
+      .map(d => `<li><span class="doc-dot"></span>${d}</li>`).join('');
+
+    hideConfirm();
+    updateChecklistButton();
+
+    document.getElementById('screen-compare').classList.remove('active');
+    document.getElementById('screen-card').classList.add('active');
+  }
+
+  function backToCompare(){
+    document.getElementById('screen-card').classList.remove('active');
+    document.getElementById('screen-compare').classList.add('active');
+  }
+
+  function updateChecklistButton(){
+    const btn = document.getElementById('checklist-btn');
+    if (checklistState[currentCard]){
+      btn.textContent = '✓ В чек-листе';
+      btn.classList.add('added');
+    } else {
+      btn.textContent = 'Добавить в чек-лист';
+      btn.classList.remove('added');
+    }
+  }
+
+  function toggleChecklist(){
+    if (checklistState[currentCard]){
+      document.getElementById('confirm-bar').classList.add('show');
+    } else {
+      checklistState[currentCard] = true;
+      updateChecklistButton();
+      showToast('toast-card', 'Добавлено в чек-лист');
+    }
+  }
+
+  function removeFromChecklist(){
+    checklistState[currentCard] = false;
+    updateChecklistButton();
+    hideConfirm();
+    showToast('toast-card', 'Убрано из чек-листа');
+  }
+
+  function hideConfirm(){
+    document.getElementById('confirm-bar').classList.remove('show');
+  }
+
+  function closeColumn(id){
+    showToast('toast-compare', 'Уберём эту меру — ищем ещё варианты?');
+  }
+
+  function closeApp(){
+    showToast('toast-card', 'Возвращаемся в чат…');
+  }
+
+  function showToast(elId, text){
+    const el = document.getElementById(elId);
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+</script>
+
+</body>
+</html>
