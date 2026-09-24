@@ -70,13 +70,17 @@ def test_parse_reports_validation_errors_with_row_and_column() -> None:
     assert "row 3, column external_code: duplicate value in file" in messages
 
 
-def test_demo_csv_loads_as_five_valid_rows() -> None:
+def test_measure_catalogs_load() -> None:
     rows, errors = load_csv(repo_data_dir() / "measures.example.csv")
 
     assert errors == []
     assert len(rows) == 5
     assert all(row.name.startswith("DEMO — ") for row in rows)
     assert all(row.source_url.startswith("https://example.com/") for row in rows)
+
+    current_rows, current_errors = load_csv(repo_data_dir() / "measures.current.csv")
+    assert current_errors == []
+    assert {row.external_code for row in current_rows} == {"MSP-RF-CATALOG", "MOS-SUPPLIER-PORTAL"}
 
 
 def test_okved_ranges_expand_to_two_digit_classes() -> None:

@@ -34,6 +34,10 @@ async def seed_demo(data_dir: Path | None = None) -> None:
             await _seed_spheres(session, data_dir / "sphere_categories.csv")
             await _seed_okved(session, data_dir / "okved_mapping.csv")
             await import_rows(session, measures, is_demo=True)
+            current_measures, current_errors = load_csv(data_dir / "measures.current.csv")
+            if current_errors:
+                raise ValueError("\n".join(str(error) for error in current_errors))
+            await import_rows(session, current_measures)
             await _seed_courses(session, data_dir / "courses.example.csv")
 
 

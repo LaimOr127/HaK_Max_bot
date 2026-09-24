@@ -95,6 +95,8 @@ class OnboardingService:
             await self._track(AnalyticsEventType.INN_LOOKUP_FAILED, max_user_id)
             raise CompanyLookupUnavailable(inn)
 
+        previous = await self._profiles.get_by_user(max_user_id)
+        same_company = previous is not None and previous.inn == inn
         profile = BusinessProfile(
             max_user_id=max_user_id,
             inn=inn,
@@ -102,8 +104,13 @@ class OnboardingService:
             region_code=result.region_code,
             primary_okved=result.primary_okved,
             business_form=result.business_form or _form_from_inn(inn),
-            employee_bucket=_bucket_from_count(result.employee_count),
-            employee_count=result.employee_count,
+            sphere=previous.sphere if same_company else None,
+            business_stage=previous.business_stage if same_company else None,
+            employee_bucket=(
+                _bucket_from_count(result.employee_count)
+                or (previous.employee_bucket if same_company else None)
+            ),
+            employee_count=result.employee_count or (previous.employee_count if same_company else None),
             msp_category=result.msp_category,
             source=ProfileSource.FNS,
             fns_checked_at=result.source_checked_at or datetime.now(UTC),

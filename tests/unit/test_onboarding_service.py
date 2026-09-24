@@ -3,13 +3,16 @@ from datetime import UTC, datetime
 import pytest
 
 from navigator.application.onboarding import OnboardingService
+from navigator.domain.entities import BusinessProfile
 from navigator.domain.enums import (
     AnalyticsEventType,
     BusinessForm,
+    BusinessStage,
     CompanyLookupStatus,
     ConversationState,
     EmployeeBucket,
     ProfileSource,
+    SphereCategory,
 )
 from navigator.domain.errors import CompanyNotFound
 from navigator.ports.company_lookup import CompanyLookupResult
@@ -119,6 +122,25 @@ async def test_lookup_inn_tracks_not_found_without_saving_profile() -> None:
         AnalyticsEventType.INN_LOOKUP_STARTED,
         AnalyticsEventType.INN_LOOKUP_NOT_FOUND,
     ]
+
+
+@pytest.mark.asyncio
+async def test_repeat_lookup_preserves_answers_for_same_inn() -> None:
+    profiles = FakeProfiles()
+    profiles.values[42] = BusinessProfile(
+        max_user_id=42,
+        inn="7707083893",
+        sphere=SphereCategory.IT_DIGITAL,
+        business_stage=BusinessStage.GT3,
+        employee_bucket=EmployeeBucket.SIXTEEN_TO_HUNDRED,
+    )
+    lookup = FakeLookup(CompanyLookupResult(status=CompanyLookupStatus.FOUND, inn="7707083893"))
+
+    profile = await OnboardingService(FakeStates(), profiles, lookup).lookup_inn(42, "7707083893")
+
+    assert profile.sphere is SphereCategory.IT_DIGITAL
+    assert profile.business_stage is BusinessStage.GT3
+    assert profile.employee_bucket is EmployeeBucket.SIXTEEN_TO_HUNDRED
 
 
 def _not_found() -> CompanyLookupResult:
