@@ -114,6 +114,9 @@ class BotRuntime:
             if current is ConversationState.AWAITING_INN:
                 await self._lookup_inn(incoming.user_id, text)
             elif current is ConversationState.MANUAL_REGION:
+                if _looks_like_inn(text):
+                    await self._lookup_inn(incoming.user_id, text)
+                    return
                 context["region_code"] = _region_code(text)
                 await repos.states.set_state(
                     incoming.user_id, ConversationState.MANUAL_BUSINESS_FORM, context
@@ -389,6 +392,10 @@ async def polling_loop(runtime: BotRuntime, max_client: MaxApiClient, timeout_se
         for update in payload.get("updates", []):
             await runtime.process_update(update)
         await asyncio.sleep(0)
+
+
+def _looks_like_inn(value: str) -> bool:
+    return len("".join(char for char in value if char.isdigit())) in {10, 12}
 
 
 def _extract_incoming(update: dict[str, Any]) -> Incoming | None:
