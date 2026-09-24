@@ -413,6 +413,11 @@ async def polling_loop(runtime: BotRuntime, max_client: MaxApiClient, timeout_se
 def _extract_incoming(update: dict[str, Any]) -> Incoming | None:
     nested_update = update.get("update")
     data: dict[str, Any] = nested_update if isinstance(nested_update, dict) else update
+    update_type = data.get("update_type")
+    if update_type == "bot_started":
+        user = data.get("user")
+        if isinstance(user, dict) and user.get("user_id") is not None:
+            return Incoming(int(user["user_id"]), text="/start")
     nested_message = data.get("message")
     message: dict[str, Any] = nested_message if isinstance(nested_message, dict) else data
     user_raw = message.get("sender") or message.get("user") or data.get("user")
@@ -436,7 +441,9 @@ def _extract_incoming(update: dict[str, Any]) -> Incoming | None:
         )
     if user_id is None:
         return None
-    return Incoming(int(user_id), text=message.get("text") or data.get("text"))
+    body = message.get("body")
+    text = body.get("text") if isinstance(body, dict) else None
+    return Incoming(int(user_id), text=text or message.get("text") or data.get("text"))
 
 
 def _missing_profile_step(profile: BusinessProfile) -> ConversationState | None:
