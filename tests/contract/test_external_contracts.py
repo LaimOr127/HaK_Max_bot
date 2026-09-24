@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import httpx
@@ -7,10 +8,12 @@ from pydantic import ValidationError
 from navigator.config import Settings
 from navigator.infrastructure.fns.local_snapshot import LocalSnapshotCompanyLookup
 from navigator.infrastructure.fns.rmsp_portal import RmspPortalCompanyLookup
+from navigator.infrastructure.max_api.errors import MaxApiNetworkError
 from navigator.infrastructure.openrouter.client import OpenRouterClient
 from navigator.infrastructure.redis.cache import RedisJsonCache
 from navigator.infrastructure.redis.idempotency import RedisIdempotencyStore
 from navigator.infrastructure.redis.rate_limit import RedisRateLimiter
+from navigator.presentation.maxbot.runtime import polling_loop
 
 
 class FakeRedis:
@@ -150,6 +153,44 @@ def test_webhook_transport_accepts_complete_secret_settings() -> None:
 
     assert settings.max_webhook_secret is not None
     assert settings.max_bot_token is not None
+
+
+def test_settings_reads_reminder_days_from_env_file(tmp_path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("REMINDER_DAYS=[7,3,1]\n", encoding="utf-8")
+
+    assert Settings(_env_file=env_file).reminder_days == (7, 3, 1)
+
+
+def test_settings_ignores_empty_optional_values_from_env_file(tmp_path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("MAX_WEBHOOK_PUBLIC_URL=\n", encoding="utf-8")
+
+    assert Settings(_env_file=env_file).max_webhook_public_url is None
+
+
+@pytest.mark.asyncio
+async def test_polling_retries_after_network_error(monkeypatch) -> None:
+    class Client:
+        calls = 0
+
+        async def get_updates(self, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise MaxApiNetworkError("network unavailable")
+            raise asyncio.CancelledError
+
+    delays: list[int] = []
+
+    async def sleep(seconds: int) -> None:
+        delays.append(seconds)
+
+    monkeypatch.setattr("navigator.presentation.maxbot.runtime.asyncio.sleep", sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await polling_loop(None, Client(), 30)
+
+    assert delays == [5]
 
 
 @pytest.mark.asyncio

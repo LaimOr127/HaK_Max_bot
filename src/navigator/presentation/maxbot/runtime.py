@@ -32,6 +32,7 @@ from navigator.domain.errors import CompanyLookupUnavailable, CompanyNotFound, I
 from navigator.infrastructure.db.repositories import SqlAlchemyRepositories
 from navigator.infrastructure.fns.adapter import CompanyLookupAdapter
 from navigator.infrastructure.max_api.client import MaxApiClient
+from navigator.infrastructure.max_api.errors import MaxApiNetworkError, MaxApiServerError
 from navigator.infrastructure.max_api.schemas import NewMessageBody
 from navigator.ports.clock import Clock
 
@@ -397,7 +398,12 @@ class BotRuntime:
 async def polling_loop(runtime: BotRuntime, max_client: MaxApiClient, timeout_seconds: int) -> None:
     marker: int | str | None = None
     while True:
-        payload = await max_client.get_updates(marker=marker, timeout_seconds=timeout_seconds)
+        try:
+            payload = await max_client.get_updates(marker=marker, timeout_seconds=timeout_seconds)
+        except (MaxApiNetworkError, MaxApiServerError) as exc:
+            log.warning("MAX polling retrying after temporary failure: %s", exc)
+            await asyncio.sleep(5)
+            continue
         marker = payload.get("marker", marker)
         for update in payload.get("updates", []):
             await runtime.process_update(update)
