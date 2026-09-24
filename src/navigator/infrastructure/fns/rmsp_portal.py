@@ -58,17 +58,28 @@ def _extract_company(payload: Any, inn: str) -> CompanySnapshot | None:
             row_matches = False
         if not row_matches:
             continue
-        name = row.get("name") or row.get("namep") or row.get("fullName") or row.get("Наименование")
+        name = (
+            row.get("name")
+            or row.get("name_ex")
+            or row.get("namep")
+            or row.get("fullName")
+            or row.get("Наименование")
+        )
         if not name:
             return None
         return CompanySnapshot(
             inn=inn,
             name=str(name),
             ogrn=_as_str(row.get("ogrn") or row.get("ogrnip") or row.get("ОГРН")),
-            okved=_as_str(row.get("okved") or row.get("ОКВЭД")),
-            region=_as_str(row.get("region") or row.get("regionName") or row.get("Регион")),
+            okved=_as_str(row.get("okved") or row.get("okved1") or row.get("ОКВЭД")),
+            region=_as_str(
+                row.get("region")
+                or row.get("regioncode")
+                or row.get("regionName")
+                or row.get("Регион")
+            ),
             is_sme=True,
-            sme_category=_as_str(row.get("category") or row.get("smeCategory")),
+            sme_category=_category(row.get("category") or row.get("smeCategory")),
         )
     return None
 
@@ -95,3 +106,7 @@ def _has_search_results(payload: Any) -> bool:
 
 def _as_str(value: Any) -> str | None:
     return None if value in (None, "") else str(value)
+
+
+def _category(value: Any) -> str | None:
+    return {"1": "micro", "2": "small", "3": "medium"}.get(str(value), _as_str(value))

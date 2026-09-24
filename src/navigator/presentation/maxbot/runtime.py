@@ -152,7 +152,7 @@ class BotRuntime:
         try:
             callback = parse_callback(incoming.callback_payload or "")
         except InvalidCallback:
-            await self._answer(incoming, "Кнопка устарела. Используйте /start.")
+            await self._send(incoming.user_id, "Кнопка устарела. Используйте /start.")
             return
 
         action = callback.action
@@ -161,19 +161,15 @@ class BotRuntime:
                 await OnboardingService(
                     repos.states, repos.profiles, self._lookup, repos.analytics
                 ).start(incoming.user_id)
-            await self._answer(incoming)
             await self._send(incoming.user_id, messages.INN_PROMPT, keyboards.INN)
             return
         if action == "nav:how":
-            await self._answer(incoming)
             await self._send(incoming.user_id, messages.HOW_IT_WORKS)
             return
         if action == "nav:profile":
-            await self._answer(incoming)
             await self._show_profile(incoming.user_id)
             return
         if action == "nav:checklist":
-            await self._answer(incoming)
             await self._show_checklist(incoming.user_id)
             return
         if action == "inn:manual":
@@ -181,34 +177,28 @@ class BotRuntime:
                 await OnboardingService(
                     repos.states, repos.profiles, self._lookup, repos.analytics
                 ).start_manual(incoming.user_id)
-            await self._answer(incoming)
             await self._send(incoming.user_id, messages.REGION_PROMPT)
             return
         if action == "profile:confirm":
-            await self._answer(incoming)
             await self._after_profile_confirm(incoming.user_id)
             return
         if action == "reset:confirm":
             async with self._repos.session() as repos:
                 await ProfileService(repos.profiles).delete_profile(incoming.user_id)
-            await self._answer(incoming)
             await self._send(incoming.user_id, messages.RESET_DONE)
             return
         if action == "reset:cancel":
             async with self._repos.session() as repos:
                 await repos.states.set_state(incoming.user_id, ConversationState.READY, {})
-            await self._answer(incoming, "Отменено.")
+            await self._send(incoming.user_id, "Отменено.")
             return
         if action in {"business_form", "sphere", "stage", "employees"}:
             await self._handle_profile_answer(incoming.user_id, action, callback.values[0])
-            await self._answer(incoming)
             return
         if action == "measure:details":
-            await self._answer(incoming)
             await self._show_measure_details(incoming.user_id, callback.uuid())
             return
         if action == "measure:add":
-            await self._answer(incoming)
             async with self._repos.session() as repos:
                 await ChecklistService(
                     repos.checklists, repos.measures, repos.analytics
@@ -216,7 +206,6 @@ class BotRuntime:
             await self._send(incoming.user_id, "Добавили в чек-лист. Откройте /checklist.")
             return
         if action == "document:toggle":
-            await self._answer(incoming)
             async with self._repos.session() as repos:
                 await ChecklistService(
                     repos.checklists, repos.measures, repos.analytics
@@ -230,7 +219,6 @@ class BotRuntime:
                     ConversationState.FEEDBACK_REASON,
                     {"measure_id": str(callback.uuid())},
                 )
-            await self._answer(incoming)
             await self._send(
                 incoming.user_id,
                 "Что не так с мерой?",
@@ -251,21 +239,19 @@ class BotRuntime:
                     ConversationState.FEEDBACK_TEXT,
                     {"measure_id": callback.values[0], "feedback_type": feedback_type},
                 )
-            await self._answer(incoming)
             await self._send(incoming.user_id, "Напишите короткий комментарий.")
             return
         if action == "investor:yes":
             async with self._repos.session() as repos:
                 await repos.states.set_state(incoming.user_id, ConversationState.INVESTOR_NAME, {})
-            await self._answer(incoming)
             await self._send(incoming.user_id, "Как к вам обращаться?")
             return
         if action == "investor:no":
             async with self._repos.session() as repos:
                 await InvestorService(repos.investors).decline(incoming.user_id)
-            await self._answer(incoming, "Хорошо.")
+            await self._send(incoming.user_id, "Хорошо.")
             return
-        await self._answer(incoming, "Действие пока недоступно.")
+        await self._send(incoming.user_id, "Действие пока недоступно.")
 
     async def _start(self, user_id: int) -> None:
         async with self._repos.session() as repos:
@@ -389,11 +375,6 @@ class BotRuntime:
         await self._max.send_message(
             NewMessageBody(text=text, attachments=attachments or []), user_id=user_id
         )
-
-    async def _answer(self, incoming: Incoming, text: str | None = None) -> None:
-        if incoming.callback_id:
-            await self._max.answer_callback(incoming.callback_id, message=text)
-
 
 async def polling_loop(runtime: BotRuntime, max_client: MaxApiClient, timeout_seconds: int) -> None:
     marker: int | str | None = None

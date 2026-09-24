@@ -89,6 +89,36 @@ async def test_rmsp_lookup_treats_unusable_rows_as_schema_drift() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rmsp_lookup_maps_the_current_official_search_shape() -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "inn": "9715384111",
+                        "name_ex": "ООО ИАС ДИДЖИТАЛ",
+                        "ogrn": "1207700181171",
+                        "okved1": "62.01",
+                        "regioncode": "77",
+                        "category": 1,
+                    }
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        result = await RmspPortalCompanyLookup(client=http).lookup_by_inn("9715384111")
+
+    assert result.status == "found"
+    assert result.company is not None
+    assert result.company.name == "ООО ИАС ДИДЖИТАЛ"
+    assert result.company.okved == "62.01"
+    assert result.company.region == "77"
+    assert result.company.sme_category == "micro"
+
+
+@pytest.mark.asyncio
 async def test_openrouter_chat_sends_privacy_preserving_non_stream_payload() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)

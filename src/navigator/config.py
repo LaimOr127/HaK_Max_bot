@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     fns_provider: Literal["rmsp_portal", "local_snapshot", "mock"] = "rmsp_portal"
     fns_lookup_enabled: bool = True
-    fns_timeout_seconds: int = 4
+    fns_timeout_seconds: int = 8
     fns_cache_ttl_seconds: int = 21600
     fns_lookup_limit_10m: int = 5
     fns_lookup_limit_1h: int = 30
