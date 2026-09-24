@@ -24,13 +24,14 @@ async def test_updates_pass_marker_and_timeout() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.params["marker"] == "10"
         assert request.url.params["timeout"] == "30"
+        assert request.extensions["timeout"]["read"] == 35
         return httpx.Response(200, json={"updates": [], "marker": 11})
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(
         transport=transport, base_url="https://platform-api2.max.ru"
     ) as http:
-        client = MaxApiClient("token", client=http)
+        client = MaxApiClient("token", client=http, timeout_seconds=10)
         assert (await client.get_updates(marker=10, timeout_seconds=30))["marker"] == 11
 
 

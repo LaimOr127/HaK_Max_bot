@@ -35,6 +35,7 @@ class MaxApiClient:
         self._own_client = client is None
         self._retries = retries
         self._token = token
+        self._timeout_seconds = timeout_seconds
         self._client = client or httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             timeout=httpx.Timeout(timeout_seconds),
@@ -68,7 +69,8 @@ class MaxApiClient:
             params["limit"] = limit
         if timeout_seconds is not None:
             params["timeout"] = timeout_seconds
-        return await self._request("GET", "/updates", params=params)
+        timeout = max(self._timeout_seconds, timeout_seconds + 5) if timeout_seconds else None
+        return await self._request("GET", "/updates", params=params, timeout=timeout)
 
     async def send_message(
         self,
