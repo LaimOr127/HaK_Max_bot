@@ -124,6 +124,8 @@ class MaxBotDispatcher:
             return (_message(max_user_id, messages.INN_PROMPT, keyboards.INN),)
         if action == "nav:how":
             return (_message(max_user_id, messages.HOW_IT_WORKS),)
+        if action == "nav:recommend":
+            return await self._recommendations(max_user_id)
         if action in {"nav:help", "nav:profile", "nav:checklist"}:
             return await self.handle_text(TextInteraction(max_user_id, f"/{action.split(':')[1]}"))
         if action in {"inn:manual", "profile:edit", "profile:edit_manual"}:

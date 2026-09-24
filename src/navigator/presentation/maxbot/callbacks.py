@@ -26,6 +26,7 @@ _EXACT = {
     "nav:help",
     "nav:profile",
     "nav:checklist",
+    "nav:recommend",
     "inn:manual",
     "inn:retry",
     "profile:confirm",

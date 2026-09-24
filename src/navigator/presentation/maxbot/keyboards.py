@@ -21,7 +21,7 @@ WELCOME = inline_keyboard(
 )
 WELCOME_BACK = inline_keyboard(
     [
-        [("Подобрать меры", "nav:start")],
+        [("Подобрать меры", "nav:recommend")],
         [("Мой профиль", "nav:profile")],
         [("Мой чек-лист", "nav:checklist")],
         [("Начать сначала", "nav:start")],

@@ -175,6 +175,9 @@ class BotRuntime:
         if action == "nav:checklist":
             await self._show_checklist(incoming.user_id)
             return
+        if action == "nav:recommend":
+            await self._show_recommendations(incoming.user_id)
+            return
         if action == "inn:manual":
             async with self._repos.session() as repos:
                 await OnboardingService(
@@ -184,6 +187,13 @@ class BotRuntime:
             return
         if action == "profile:confirm":
             await self._after_profile_confirm(incoming.user_id)
+            return
+        if action in {"profile:edit", "profile:edit_manual"}:
+            async with self._repos.session() as repos:
+                await OnboardingService(
+                    repos.states, repos.profiles, self._lookup, repos.analytics
+                ).start_manual(incoming.user_id)
+            await self._send(incoming.user_id, messages.REGION_PROMPT)
             return
         if action == "reset:confirm":
             async with self._repos.session() as repos:
