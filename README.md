@@ -15,6 +15,7 @@ flowchart TD
     APP --> FNS[FNS Adapter]
     APP --> EXPLAIN[Explanation Provider]
     FNS --> RMSP[Public FNS/RMSP source]
+    FNS -. fallback .-> PB[Transparent Business public search]
     EXPLAIN --> TEMPLATE[Template]
     EXPLAIN -. feature flag .-> OR[OpenRouter]
     WORKER[Worker Container] --> DB
@@ -47,13 +48,13 @@ Local compose starts PostgreSQL, Redis, migrations, the API/bot, and the reminde
 
 Secrets live only in `.env` or deployment secret storage. `.env.example` contains placeholders for PostgreSQL, Redis, MAX, FNS, OpenRouter, mini-app, reminders, and debug toggles.
 
-OpenRouter is off by default and must never decide eligibility. Measures and courses are manually curated data, not a live МСП.РФ API. FNS is best-effort profile enrichment with a manual dialog fallback.
+OpenRouter is off by default and must never decide eligibility. Measures and courses are manually curated data, not a live МСП.РФ API. The included 29-measure catalogue is synthetic MVP data from `table1.xlsx`: it demonstrates the selection flow and must be replaced or independently verified before production. FNS is best-effort profile enrichment with a manual dialog fallback.
 
 ## External Contracts
 
 - MAX API base URL is `https://platform-api2.max.ru`. Requests use raw `Authorization: <MAX_BOT_TOKEN>`, never token query parameters.
 - MAX webhook requests are authenticated with `X-Max-Bot-Api-Secret`. The webhook handler must respond `200` within 30 seconds; duplicate delivery must return `200` without repeated side effects.
-- FNS enrichment uses the official SME open dataset at `https://www.nalog.gov.ru/opendata/7707329152-rsmp/` plus public search. There is no documented official per-INN REST API in scope.
+- FNS enrichment checks the official SME register at `https://www.nalog.gov.ru/opendata/7707329152-rsmp/` first, then the public Transparent Business search as a best-effort fallback for entities outside the SME register. There is no documented official per-INN REST API in scope.
 - Any internal `search-proc.json` endpoint is best-effort only; the product must keep manual fallback.
 - OpenRouter uses `/api/v1/chat/completions` with Bearer auth, provider `ZDR`, and data collection disabled; it remains disabled by default.
 
@@ -89,4 +90,4 @@ The script securely prompts only for `MAX_BOT_TOKEN` and `CADDY_EMAIL`, generate
 
 ## Known Limitations
 
-The bot path is implemented: onboarding, deterministic recommendations, details, checklists, feedback, investor lead capture, webhook/polling transport, idempotency, import, and reminders. A real MAX token and a running Docker daemon are still needed for an external smoke test; Mini App work is deliberately deferred.
+The bot path is implemented: onboarding, deterministic recommendations, details, checklists, feedback, investor lead capture, webhook/polling transport, idempotency, import, and reminders. The supplied support catalogue is synthetic, so results are not a legal eligibility decision and must be checked at the linked source. A real MAX token and a running Docker daemon are still needed for an external smoke test; Mini App work is deliberately deferred.

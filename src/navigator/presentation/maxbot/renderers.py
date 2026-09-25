@@ -4,26 +4,42 @@ from collections.abc import Iterable
 from datetime import date
 from typing import Any
 
-
 _PROFILE_LABELS = {
     "business_form": {"ip": "ИП", "ooo": "ООО", "self_employed": "самозанятый"},
     "sphere": {
         "foodservice": "общепит",
         "retail": "розничная торговля",
         "household_services": "бытовые услуги",
+        "professional": "профессиональные и деловые услуги",
         "it_digital": "IT и цифровые услуги",
         "manufacturing": "производство",
         "construction_repair": "строительство и ремонт",
         "beauty_health": "красота и здоровье",
+        "health": "здоровье и медицина",
         "education": "образование",
         "transport_logistics": "транспорт и логистика",
+        "tourism": "туризм и гостеприимство",
         "other": "прочее",
     },
-    "business_stage": {"new": "только открылись", "lt1": "до 1 года", "1_3": "1–3 года", "gt3": "больше 3 лет"},
+    "business_stage": {
+        "new": "только открылись",
+        "lt1": "до 1 года",
+        "1_3": "1–3 года",
+        "gt3": "больше 3 лет",
+    },
     "employee_bucket": {"1": "1", "2_15": "2–15", "16_100": "16–100", "100_plus": "больше 100"},
-    "msp_category": {"micro": "микропредприятие", "small": "малое предприятие", "medium": "среднее предприятие"},
+    "msp_category": {
+        "micro": "микропредприятие",
+        "small": "малое предприятие",
+        "medium": "среднее предприятие",
+    },
 }
-_REGION_LABELS = {"77": "Москва (77)"}
+_REGION_LABELS = {
+    "16": "Республика Татарстан (16)",
+    "50": "Московская область (50)",
+    "77": "Москва (77)",
+    "78": "Санкт-Петербург (78)",
+}
 
 
 def _profile_value(profile: Any, field: str, default: str) -> str:
@@ -74,7 +90,8 @@ def render_measure(measure: Any, reasons: Iterable[str]) -> str:
     detail_text = f"\n{detail}" if detail else ""
     return (
         f"{measure.name}\n\n{level}\n{measure.amount_display}"
-        f"{detail_text}\n\nПочему может подойти:\n{bullets or '• Условия сверяются в первоисточнике.'}"
+        f"{detail_text}\n\nПочему может подойти:\n"
+        f"{bullets or '• Условия сверяются в первоисточнике.'}"
     )
 
 

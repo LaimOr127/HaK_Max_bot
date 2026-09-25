@@ -119,6 +119,71 @@ async def test_rmsp_lookup_maps_the_current_official_search_shape() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rmsp_lookup_falls_back_to_transparent_business_for_non_sme_company() -> None:
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.host == "rmsp.nalog.ru":
+            return httpx.Response(200, json={"data": []})
+        if len(requests) == 2:
+            assert request.content == b"mode=search-all&queryAll=7707083893&page=1&pageSize=10"
+            return httpx.Response(200, json={"id": "request-1"})
+        assert request.content == b"id=request-1&method=get-response"
+        return httpx.Response(
+            200,
+            json={
+                "ul": {
+                    "data": [
+                        {
+                            "inn": "7707083893",
+                            "namep": "ПАО СБЕРБАНК",
+                            "ogrn": "1027700132195",
+                            "okved2main": "64.19",
+                        }
+                    ]
+                }
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        result = await RmspPortalCompanyLookup(client=http, poll_delays=(0,)).lookup_by_inn(
+            "7707083893"
+        )
+
+    assert result.status == "found"
+    assert result.source == "transparent_business"
+    assert result.company is not None
+    assert result.company.name == "ПАО СБЕРБАНК"
+    assert result.company.region == "77"
+
+
+@pytest.mark.asyncio
+async def test_rmsp_lookup_uses_transparent_business_when_smeregister_is_unavailable() -> None:
+    calls = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if request.url.host == "rmsp.nalog.ru":
+            return httpx.Response(503)
+        if calls == 2:
+            return httpx.Response(200, json={"id": "request-1"})
+        return httpx.Response(
+            200,
+            json={"ul": {"data": [{"inn": "7707083893", "namep": "ПАО СБЕРБАНК"}]}},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        result = await RmspPortalCompanyLookup(client=http, poll_delays=(0,)).lookup_by_inn(
+            "7707083893"
+        )
+
+    assert result.status == "found"
+    assert result.source == "transparent_business"
+
+
+@pytest.mark.asyncio
 async def test_openrouter_chat_sends_privacy_preserving_non_stream_payload() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)

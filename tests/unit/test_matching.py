@@ -115,7 +115,7 @@ def test_sorting_and_limit() -> None:
         make_measure(4, priority=0, amount_max_rub=Decimal("999")),
     ]
     assert [result.measure.external_code for result in recommend(profile(), measures, TODAY)] == [
-        "DEMO-2",
         "DEMO-3",
         "DEMO-1",
+        "DEMO-2",
     ]

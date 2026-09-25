@@ -125,7 +125,7 @@ def _sort_key(result: MatchResult) -> tuple[int, int, date, str]:
     measure = result.measure
     amount = int(measure.amount_max_rub or -1)
     deadline = measure.application_deadline or date.max
-    return (-measure.priority, -amount, deadline, measure.name or str(measure.id))
+    return (-amount, -measure.priority, deadline, measure.name or str(measure.id))
 
 
 def _employee_range(profile: BusinessProfile) -> tuple[int, int | None] | None:

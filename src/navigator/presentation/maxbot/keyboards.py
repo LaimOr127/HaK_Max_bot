@@ -24,7 +24,7 @@ WELCOME_BACK = inline_keyboard(
         [("Подобрать меры", "nav:recommend")],
         [("Мой профиль", "nav:profile")],
         [("Мой чек-лист", "nav:checklist")],
-        [("Начать сначала", "nav:start")],
+        [("Проверить другой ИНН", "nav:start")],
     ]
 )
 INN = inline_keyboard([[("Заполнить вручную", "inn:manual")]])
@@ -45,13 +45,12 @@ SPHERE = inline_keyboard(
         [("Общепит", "sphere:foodservice"), ("Розничная торговля", "sphere:retail")],
         [
             ("Бытовые услуги", "sphere:household_services"),
-            ("IT и цифровые услуги", "sphere:it_digital"),
+            ("Деловые услуги", "sphere:professional"),
         ],
-        [
-            ("Производство", "sphere:manufacturing"),
-            ("Строительство и ремонт", "sphere:construction_repair"),
-        ],
-        [("Красота и здоровье", "sphere:beauty_health"), ("Образование", "sphere:education")],
+        [("IT и цифровые услуги", "sphere:it_digital"), ("Производство", "sphere:manufacturing")],
+        [("Строительство и ремонт", "sphere:construction_repair")],
+        [("Красота", "sphere:beauty_health"), ("Здоровье и медицина", "sphere:health")],
+        [("Образование", "sphere:education"), ("Туризм", "sphere:tourism")],
         [("Транспорт и логистика", "sphere:transport_logistics"), ("Прочее", "sphere:other")],
     ]
 )

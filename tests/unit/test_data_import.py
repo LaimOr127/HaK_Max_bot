@@ -74,9 +74,13 @@ def test_measure_catalogs_load() -> None:
     rows, errors = load_csv(repo_data_dir() / "measures.example.csv")
 
     assert errors == []
-    assert len(rows) == 5
-    assert all(row.name.startswith("DEMO — ") for row in rows)
-    assert all(row.source_url.startswith("https://example.com/") for row in rows)
+    assert {row.external_code for row in rows} == {f"MVP-{index:02d}" for index in range(1, 30)}
+    assert {sphere for row in rows for sphere in row.spheres} >= {
+        "professional",
+        "health",
+        "tourism",
+    }
+    assert all(row.source_name.startswith("Синтетические данные (MVP)") for row in rows)
 
     current_rows, current_errors = load_csv(repo_data_dir() / "measures.current.csv")
     assert current_errors == []

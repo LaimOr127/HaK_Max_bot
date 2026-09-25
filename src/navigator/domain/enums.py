@@ -27,12 +27,15 @@ class SphereCategory(StrEnum):
     FOODSERVICE = "foodservice"
     RETAIL = "retail"
     HOUSEHOLD_SERVICES = "household_services"
+    PROFESSIONAL = "professional"
     IT_DIGITAL = "it_digital"
     MANUFACTURING = "manufacturing"
     CONSTRUCTION_REPAIR = "construction_repair"
     BEAUTY_HEALTH = "beauty_health"
+    HEALTH = "health"
     EDUCATION = "education"
     TRANSPORT_LOGISTICS = "transport_logistics"
+    TOURISM = "tourism"
     OTHER = "other"
 
 
