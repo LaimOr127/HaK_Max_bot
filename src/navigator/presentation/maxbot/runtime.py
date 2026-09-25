@@ -57,6 +57,7 @@ class Incoming:
     text: str | None = None
     callback_payload: str | None = None
     callback_id: str | None = None
+    callback_message_id: str | None = None
 
 
 class BotRuntime:
@@ -66,11 +67,13 @@ class BotRuntime:
         sessionmaker: async_sessionmaker[AsyncSession],
         max_client: MaxApiClient,
         company_lookup: Any,
+        miniapp_web_app: str | None = None,
     ) -> None:
         self._repos = SqlAlchemyRepositories(sessionmaker)
         self._max = max_client
         self._lookup = CompanyLookupAdapter(company_lookup)
         self._clock = SystemClock()
+        self._miniapp_web_app = miniapp_web_app
 
     async def process_update(self, update: dict[str, Any]) -> None:
         incoming = _extract_incoming(update)
@@ -155,29 +158,33 @@ class BotRuntime:
         try:
             callback = parse_callback(incoming.callback_payload or "")
         except InvalidCallback:
-            await self._close_callback(incoming, "Кнопка устарела")
-            await self._send(incoming.user_id, "Кнопка устарела. Используйте /start.")
+            log.info("ignored unknown MAX callback payload")
+            await self._acknowledge_callback(incoming)
             return
 
-        await self._close_callback(incoming, _callback_summary(callback))
         action = callback.action
         if action in {"nav:start", "inn:retry"}:
             async with self._repos.session() as repos:
                 await OnboardingService(
                     repos.states, repos.profiles, self._lookup, repos.analytics
                 ).start(incoming.user_id)
+            await self._close_callback(incoming, _callback_summary(callback))
             await self._send(incoming.user_id, messages.INN_PROMPT, keyboards.INN)
             return
         if action == "nav:how":
+            await self._close_callback(incoming, _callback_summary(callback))
             await self._send(incoming.user_id, messages.HOW_IT_WORKS)
             return
         if action == "nav:profile":
+            await self._close_callback(incoming, _callback_summary(callback))
             await self._show_profile(incoming.user_id)
             return
         if action == "nav:checklist":
+            await self._close_callback(incoming, _callback_summary(callback))
             await self._show_checklist(incoming.user_id)
             return
         if action == "nav:recommend":
+            await self._close_callback(incoming)
             await self._show_recommendations(incoming.user_id)
             return
         if action == "inn:manual":
@@ -185,35 +192,50 @@ class BotRuntime:
                 await OnboardingService(
                     repos.states, repos.profiles, self._lookup, repos.analytics
                 ).start_manual(incoming.user_id)
+            await self._close_callback(incoming, _callback_summary(callback))
             await self._send(incoming.user_id, messages.REGION_PROMPT)
             return
         if action == "profile:confirm":
+            async with self._repos.session() as repos:
+                state = await repos.states.get_state(incoming.user_id)
+            if state is None or state[0] is not ConversationState.CONFIRM_PROFILE:
+                await self._acknowledge_callback(incoming)
+                return
             await self._after_profile_confirm(incoming.user_id)
+            await self._close_callback(incoming)
             return
         if action in {"profile:edit", "profile:edit_manual"}:
             async with self._repos.session() as repos:
                 await OnboardingService(
                     repos.states, repos.profiles, self._lookup, repos.analytics
                 ).start_manual(incoming.user_id)
+            await self._close_callback(incoming)
             await self._send(incoming.user_id, messages.REGION_PROMPT)
             return
         if action == "reset:confirm":
             async with self._repos.session() as repos:
                 await ProfileService(repos.profiles).delete_profile(incoming.user_id)
+            await self._close_callback(incoming, _callback_summary(callback))
             await self._send(incoming.user_id, messages.RESET_DONE)
             return
         if action == "reset:cancel":
             async with self._repos.session() as repos:
                 await repos.states.set_state(incoming.user_id, ConversationState.READY, {})
+            await self._close_callback(incoming, _callback_summary(callback))
             await self._send(incoming.user_id, "Отменено.")
             return
         if action in {"business_form", "sphere", "stage", "employees"}:
-            await self._handle_profile_answer(incoming.user_id, action, callback.values[0])
+            if await self._handle_profile_answer(incoming.user_id, action, callback.values[0]):
+                await self._close_callback(incoming, _callback_summary(callback))
+            else:
+                await self._acknowledge_callback(incoming)
             return
         if action == "measure:details":
+            await self._acknowledge_callback(incoming)
             await self._show_measure_details(incoming.user_id, callback.uuid())
             return
         if action == "measure:add":
+            await self._acknowledge_callback(incoming)
             async with self._repos.session() as repos:
                 await ChecklistService(
                     repos.checklists, repos.measures, repos.analytics
@@ -221,6 +243,7 @@ class BotRuntime:
             await self._send(incoming.user_id, "Добавили в чек-лист. Откройте /checklist.")
             return
         if action == "document:toggle":
+            await self._acknowledge_callback(incoming)
             async with self._repos.session() as repos:
                 await ChecklistService(
                     repos.checklists, repos.measures, repos.analytics
@@ -228,6 +251,7 @@ class BotRuntime:
             await self._show_checklist(incoming.user_id)
             return
         if action == "measure:feedback":
+            await self._acknowledge_callback(incoming)
             async with self._repos.session() as repos:
                 await repos.states.set_state(
                     incoming.user_id,
@@ -247,6 +271,7 @@ class BotRuntime:
             )
             return
         if action.startswith("feedback:"):
+            await self._acknowledge_callback(incoming)
             feedback_type = action.split(":", 1)[1]
             async with self._repos.session() as repos:
                 await repos.states.set_state(
@@ -257,11 +282,13 @@ class BotRuntime:
             await self._send(incoming.user_id, "Напишите короткий комментарий.")
             return
         if action == "investor:yes":
+            await self._acknowledge_callback(incoming)
             async with self._repos.session() as repos:
                 await repos.states.set_state(incoming.user_id, ConversationState.INVESTOR_NAME, {})
             await self._send(incoming.user_id, "Как к вам обращаться?")
             return
         if action == "investor:no":
+            await self._acknowledge_callback(incoming)
             async with self._repos.session() as repos:
                 await InvestorService(repos.investors).decline(incoming.user_id)
             await self._send(incoming.user_id, "Хорошо.")
@@ -271,6 +298,16 @@ class BotRuntime:
     async def _start(self, user_id: int) -> None:
         async with self._repos.session() as repos:
             profile = await ProfileService(repos.profiles).get_profile(user_id)
+            if profile is None and self._miniapp_web_app:
+                await OnboardingService(
+                    repos.states, repos.profiles, self._lookup, repos.analytics
+                ).start(user_id)
+        if self._miniapp_web_app and (profile is None or _missing_profile_step(profile) is None):
+            greeting = messages.WELCOME if profile is None else messages.WELCOME_BACK
+            if profile is None:
+                greeting += "\n\nДля подбора отправьте ИНН сообщением сюда."
+            await self._send(user_id, greeting, keyboards.home(self._miniapp_web_app))
+            return
         if profile is None:
             await self._send(user_id, messages.WELCOME, keyboards.WELCOME)
         else:
@@ -308,9 +345,17 @@ class BotRuntime:
             await repos.states.set_state(user_id, ConversationState.READY, {})
         await self._show_recommendations(user_id)
 
-    async def _handle_profile_answer(self, user_id: int, field: str, value: str) -> None:
+    async def _handle_profile_answer(self, user_id: int, field: str, value: str) -> bool:
         async with self._repos.session() as repos:
             state = await repos.states.get_state(user_id)
+            expected = {
+                "business_form": ConversationState.MANUAL_BUSINESS_FORM,
+                "sphere": ConversationState.MANUAL_SPHERE,
+                "stage": ConversationState.MANUAL_STAGE,
+                "employees": ConversationState.MANUAL_EMPLOYEES,
+            }[field]
+            if state is None or state[0] is not expected:
+                return False
             context = state[1] if state else {}
             context[field] = value
             profile = await ProfileService(repos.profiles).get_profile(user_id)
@@ -320,9 +365,10 @@ class BotRuntime:
             if step is not None:
                 await repos.states.set_state(user_id, step, _context_from_profile(merged))
                 await self._send(user_id, _prompt_for_step(step), _keyboard_for_step(step))
-                return
-            await repos.states.set_state(user_id, ConversationState.READY, {})
+                return True
+            await repos.states.set_state(user_id, ConversationState.CONFIRM_PROFILE, {})
         await self._send(user_id, render_profile(merged), keyboards.CONFIRM)
+        return True
 
     async def _show_profile(self, user_id: int) -> None:
         async with self._repos.session() as repos:
@@ -330,7 +376,7 @@ class BotRuntime:
         if profile is None:
             await self._send(user_id, "Профиль ещё не заполнен. Начните с /start.")
         else:
-            await self._send(user_id, render_profile(profile), keyboards.CONFIRM)
+            await self._send(user_id, render_profile(profile), keyboards.PROFILE_SAVED)
 
     async def _show_recommendations(self, user_id: int) -> None:
         async with self._repos.session() as repos:
@@ -348,6 +394,15 @@ class BotRuntime:
                         render_measure(measure, item.reasons),
                         keyboards.measure(str(measure.id)),
                     )
+            if self._miniapp_web_app and len(recommendations) >= 2:
+                first, second = recommendations[:2]
+                await self._send(
+                    user_id,
+                    "Сравните две подходящие меры рядом — условия, суммы и документы.",
+                    keyboards.compare(
+                        self._miniapp_web_app, str(first.measure_id), str(second.measure_id)
+                    ),
+                )
             if await InvestorService(repos.investors).should_prompt(user_id):
                 await self._send(user_id, messages.INVESTOR_PROMPT, keyboards.INVESTOR)
 
@@ -391,17 +446,27 @@ class BotRuntime:
             NewMessageBody(text=text, attachments=attachments), user_id=user_id
         )
 
-    async def _close_callback(self, incoming: Incoming, summary: str) -> None:
-        """Replace answered inline controls with a compact chat transcript."""
+    async def _close_callback(self, incoming: Incoming, summary: str | None = None) -> None:
+        """Acknowledge the tap and remove one-time buttons from its message."""
         if incoming.callback_id is None:
             return
         try:
-            await self._max.answer_callback(
-                incoming.callback_id,
-                message=NewMessageBody(text=f"✓ {summary}", attachments=[]),
-            )
+            await self._max.answer_callback(incoming.callback_id)
+            if incoming.callback_message_id is not None:
+                await self._max.edit_message(
+                    incoming.callback_message_id,
+                    NewMessageBody(text=f"✓ {summary}" if summary else None, attachments=[]),
+                )
         except (MaxApiNetworkError, MaxApiServerError) as exc:
             log.warning("could not clear answered MAX keyboard: %s", exc)
+
+    async def _acknowledge_callback(self, incoming: Incoming) -> None:
+        if incoming.callback_id is None:
+            return
+        try:
+            await self._max.answer_callback(incoming.callback_id)
+        except (MaxApiNetworkError, MaxApiServerError) as exc:
+            log.warning("could not acknowledge MAX callback: %s", exc)
 
 async def polling_loop(runtime: BotRuntime, max_client: MaxApiClient, timeout_seconds: int) -> None:
     marker: int | str | None = None
@@ -489,12 +554,15 @@ def _extract_incoming(update: dict[str, Any]) -> Incoming | None:
         user_id = user.get("user_id") or user.get("id") or user_id
         payload = callback.get("payload") or callback.get("data")
         callback_id = callback.get("callback_id") or callback.get("id")
+        body = message.get("body")
+        message_id = body.get("mid") if isinstance(body, dict) else None
         if user_id is None or payload is None:
             return None
         return Incoming(
             int(user_id),
             callback_payload=str(payload),
             callback_id=str(callback_id) if callback_id is not None else None,
+            callback_message_id=str(message_id) if message_id is not None else None,
         )
     if user_id is None:
         return None

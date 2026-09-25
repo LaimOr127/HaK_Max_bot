@@ -121,11 +121,17 @@ def _is_available(measure: Measure, today: date) -> bool:
     return measure.application_deadline is None or measure.application_deadline >= today
 
 
-def _sort_key(result: MatchResult) -> tuple[int, int, date, str]:
+def _sort_key(result: MatchResult) -> tuple[bool, int, int, date, str]:
     measure = result.measure
     amount = int(measure.amount_max_rub or -1)
     deadline = measure.application_deadline or date.max
-    return (-amount, -measure.priority, deadline, measure.name or str(measure.id))
+    return (
+        measure.priority <= 0,
+        -amount,
+        -measure.priority,
+        deadline,
+        measure.name or str(measure.id),
+    )
 
 
 def _employee_range(profile: BusinessProfile) -> tuple[int, int | None] | None:

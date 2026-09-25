@@ -25,6 +25,7 @@ from navigator.infrastructure.max_api.client import MaxApiClient
 from navigator.infrastructure.max_api.gateway import MaxApiGateway
 from navigator.infrastructure.observability.logging import configure_logging
 from navigator.infrastructure.redis.idempotency import RedisIdempotencyStore
+from navigator.presentation.http.miniapp import router as miniapp_router
 from navigator.presentation.maxbot.runtime import BotRuntime, SystemClock, polling_loop
 
 settings = get_settings()
@@ -43,8 +44,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     polling_task = None
 
     app.state.db_engine = engine
+    app.state.db_sessionmaker = sessionmaker
     app.state.redis = redis
     app.state.bot_runtime = None
+    app.state.max_client = None
 
     if settings.max_bot_token is not None:
         max_client = MaxApiClient(
@@ -52,10 +55,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             base_url=str(settings.max_api_base_url),
             timeout_seconds=settings.max_http_timeout_seconds,
         )
+        app.state.max_client = max_client
+        miniapp_web_app = None
+        if settings.miniapp_enabled:
+            try:
+                me = await max_client.get_me()
+                miniapp_web_app = str(me["username"])
+            except Exception:
+                log.exception("MAX mini-app button unavailable: could not resolve bot username")
         app.state.bot_runtime = BotRuntime(
             sessionmaker=sessionmaker,
             max_client=max_client,
             company_lookup=company_lookup,
+            miniapp_web_app=miniapp_web_app,
         )
         if settings.max_transport == "polling":
             polling_task = asyncio.create_task(
@@ -81,6 +93,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Benefit Navigator", version="0.1.0", lifespan=lifespan)
+app.include_router(miniapp_router)
 
 
 @app.get("/health/live")

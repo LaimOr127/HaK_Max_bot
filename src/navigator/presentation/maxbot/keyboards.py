@@ -72,6 +72,9 @@ CONFIRM = inline_keyboard(
         [("Изменить данные", "profile:edit")],
     ]
 )
+PROFILE_SAVED = inline_keyboard(
+    [[("Подобрать меры", "nav:recommend")], [("Изменить данные", "profile:edit")]]
+)
 RESET = inline_keyboard(
     [
         [("Да, удалить", "reset:confirm")],
@@ -94,6 +97,38 @@ def measure(measure_id: str) -> list[dict[str, object]]:
             [("Мера не подходит", f"measure:feedback:{measure_id}")],
         ]
     )
+
+
+def compare(web_app: str, first_id: str, second_id: str) -> list[dict[str, object]]:
+    return [
+        {
+            "type": "inline_keyboard",
+            "payload": {
+                "buttons": [[{
+                    "type": "open_app",
+                    "text": "Сравнить",
+                    "web_app": web_app,
+                    "payload": f"compare_{first_id}_{second_id}",
+                }]]
+            },
+        }
+    ]
+
+
+def home(web_app: str) -> list[dict[str, object]]:
+    return [
+        {
+            "type": "inline_keyboard",
+            "payload": {
+                "buttons": [[{
+                    "type": "open_app",
+                    "text": "Открыть навигатор",
+                    "web_app": web_app,
+                    "payload": "home",
+                }]]
+            },
+        }
+    ]
 
 
 def document(document_id: str, is_done: bool) -> list[dict[str, object]]:

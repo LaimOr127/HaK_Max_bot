@@ -14,6 +14,7 @@ COPY migrations ./migrations
 COPY scripts ./scripts
 COPY data ./data
 COPY src ./src
+COPY front ./front
 COPY certs/russian-trusted-root-ca.crt /usr/local/share/ca-certificates/russian-trusted-root-ca.crt
 
 RUN update-ca-certificates \

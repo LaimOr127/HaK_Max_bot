@@ -2,7 +2,7 @@
 
 Bot-first MVP for MAX: a small-business owner answers a short dialog, gets 1-3 suitable support measures, saves one to a checklist, and tracks documents later.
 
-Mini-app work is intentionally deferred until the bot acceptance path works end to end.
+The optional mini-app compares two measures selected by the bot and uses the same checklist.
 
 ```mermaid
 flowchart TD
@@ -21,7 +21,7 @@ flowchart TD
     WORKER[Worker Container] --> DB
     WORKER --> MAXAPI
     CADDY[Caddy HTTPS] --> BOT
-    MINI[Future Mini App] -. later .-> BOT
+    MINI[MAX Mini App] --> BOT
 ```
 
 ## Quick Start
@@ -35,6 +35,8 @@ curl http://localhost:8000/health/ready
 ```
 
 Local compose starts PostgreSQL, Redis, migrations, the API/bot, and the reminder worker. MAX polling is configured through `MAX_TRANSPORT=polling`; real MAX calls require `MAX_BOT_TOKEN`. For local Python checks, run `uv sync --extra dev` once.
+
+The mini-app entry is `/miniapp` (the older `/miniapp/compare` URL remains available). Publish `/miniapp` over HTTPS, attach that URL to the existing bot in the MAX partner settings, and choose the native **Старт** launch button. Then set `MINIAPP_ENABLED=true` and `MINIAPP_COMPARE_URL=https://your-host/miniapp` (the variable name is retained for compatibility). `/start` sends a single mini-app entry when integration is enabled; MAX does not document automatic WebView opening from a bot command. The same page shows the home menu on a normal launch and comparison for a signed `compare_...` launch. Profile data is available only with signed MAX Bridge init data. Without a public HTTPS URL and partner registration, keep the feature disabled and use the chat flow.
 
 ## Commands
 
@@ -90,4 +92,4 @@ The script securely prompts only for `MAX_BOT_TOKEN` and `CADDY_EMAIL`, generate
 
 ## Known Limitations
 
-The bot path is implemented: onboarding, deterministic recommendations, details, checklists, feedback, investor lead capture, webhook/polling transport, idempotency, import, and reminders. The supplied support catalogue is synthetic, so results are not a legal eligibility decision and must be checked at the linked source. A real MAX token and a running Docker daemon are still needed for an external smoke test; Mini App work is deliberately deferred.
+The bot path is implemented: onboarding, deterministic recommendations, details, checklists, feedback, investor lead capture, webhook/polling transport, idempotency, import, and reminders. The supplied support catalogue is synthetic, so results are not a legal eligibility decision and must be checked at the linked source. The mini-app API and page are wired locally, but opening it from MAX additionally requires a registered public HTTPS URL.
