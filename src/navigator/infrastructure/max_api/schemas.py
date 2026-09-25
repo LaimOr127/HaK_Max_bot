@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal
 
 JsonDict = dict[str, Any]
@@ -35,7 +35,7 @@ class InlineButton:
 @dataclass(frozen=True)
 class NewMessageBody:
     text: str | None = None
-    attachments: list[JsonDict] = field(default_factory=list)
+    attachments: list[JsonDict] | None = None
     link: JsonDict | None = None
     notify: bool | None = None
     format: TextFormat | None = None
@@ -44,7 +44,7 @@ class NewMessageBody:
         payload: JsonDict = {}
         if self.text is not None:
             payload["text"] = self.text
-        if self.attachments:
+        if self.attachments is not None:
             payload["attachments"] = self.attachments
         if self.link is not None:
             payload["link"] = self.link

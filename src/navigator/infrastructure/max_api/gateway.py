@@ -24,6 +24,6 @@ class MaxApiGateway:
                 )
             )
         await self._client.send_message(
-            NewMessageBody(text=message.text, attachments=attachments),
+            NewMessageBody(text=message.text, attachments=attachments or None),
             user_id=message.max_user_id,
         )

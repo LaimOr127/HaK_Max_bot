@@ -37,7 +37,7 @@ from navigator.infrastructure.max_api.schemas import NewMessageBody
 from navigator.ports.clock import Clock
 
 from . import keyboards, messages
-from .callbacks import InvalidCallback, parse_callback
+from .callbacks import Callback, InvalidCallback, parse_callback
 from .renderers import render_measure, render_profile
 
 log = logging.getLogger(__name__)
@@ -155,9 +155,11 @@ class BotRuntime:
         try:
             callback = parse_callback(incoming.callback_payload or "")
         except InvalidCallback:
+            await self._close_callback(incoming, "Кнопка устарела")
             await self._send(incoming.user_id, "Кнопка устарела. Используйте /start.")
             return
 
+        await self._close_callback(incoming, _callback_summary(callback))
         action = callback.action
         if action in {"nav:start", "inn:retry"}:
             async with self._repos.session() as repos:
@@ -386,8 +388,20 @@ class BotRuntime:
         self, user_id: int, text: str, attachments: list[dict[str, object]] | None = None
     ) -> None:
         await self._max.send_message(
-            NewMessageBody(text=text, attachments=attachments or []), user_id=user_id
+            NewMessageBody(text=text, attachments=attachments), user_id=user_id
         )
+
+    async def _close_callback(self, incoming: Incoming, summary: str) -> None:
+        """Replace answered inline controls with a compact chat transcript."""
+        if incoming.callback_id is None:
+            return
+        try:
+            await self._max.answer_callback(
+                incoming.callback_id,
+                message=NewMessageBody(text=f"✓ {summary}", attachments=[]),
+            )
+        except (MaxApiNetworkError, MaxApiServerError) as exc:
+            log.warning("could not clear answered MAX keyboard: %s", exc)
 
 async def polling_loop(runtime: BotRuntime, max_client: MaxApiClient, timeout_seconds: int) -> None:
     marker: int | str | None = None
@@ -406,6 +420,51 @@ async def polling_loop(runtime: BotRuntime, max_client: MaxApiClient, timeout_se
 
 def _looks_like_inn(value: str) -> bool:
     return len("".join(char for char in value if char.isdigit())) in {10, 12}
+
+
+def _callback_summary(callback: Callback) -> str:
+    exact = {
+        "nav:start": "Проверить другой ИНН",
+        "nav:how": "Как это работает",
+        "nav:help": "Помощь",
+        "nav:profile": "Мой профиль",
+        "nav:checklist": "Мой чек-лист",
+        "nav:recommend": "Подобрать меры",
+        "inn:manual": "Заполнить вручную",
+        "inn:retry": "Ввести другой ИНН",
+        "profile:confirm": "Профиль подтверждён",
+        "profile:edit": "Изменить данные",
+        "profile:edit_inn": "Изменить ИНН",
+        "profile:edit_manual": "Заполнить профиль вручную",
+        "reset:confirm": "Профиль удалён",
+        "reset:cancel": "Удаление отменено",
+        "investor:yes": "Интересно узнать о запуске",
+        "investor:no": "Не сейчас",
+        "measure:details": "Открываю подробности меры",
+        "measure:add": "Добавить в чек-лист",
+        "measure:feedback": "Сообщить о проблеме с мерой",
+        "document:toggle": "Обновить чек-лист",
+        "feedback:not_eligible": "Не подхожу",
+        "feedback:outdated": "Условия устарели",
+        "feedback:other": "Другая причина",
+    }
+    if callback.action in exact:
+        return exact[callback.action]
+    labels = {
+        "business_form": {"ip": "ИП", "ooo": "ООО", "self_employed": "Самозанятый"},
+        "sphere": {
+            "foodservice": "Общепит", "retail": "Розничная торговля",
+            "household_services": "Бытовые услуги", "professional": "Деловые услуги",
+            "it_digital": "IT и цифровые услуги", "manufacturing": "Производство",
+            "construction_repair": "Строительство и ремонт",
+            "beauty_health": "Красота", "health": "Здоровье и медицина",
+            "education": "Образование", "tourism": "Туризм",
+            "transport_logistics": "Транспорт и логистика", "other": "Прочее",
+        },
+        "stage": {"new": "Только открылись", "lt1": "До 1 года", "1_3": "1–3 года", "gt3": "Больше 3 лет"},
+        "employees": {"1": "1 сотрудник", "2_15": "2–15 сотрудников", "16_100": "16–100 сотрудников", "100_plus": "Больше 100 сотрудников"},
+    }
+    return labels.get(callback.action, {}).get(callback.values[0] if callback.values else "", "Действие выбрано")
 
 
 def _extract_incoming(update: dict[str, Any]) -> Incoming | None:

@@ -1,7 +1,10 @@
+import json
+
 import httpx
 import pytest
 
 from navigator.infrastructure.max_api.client import MaxApiClient
+from navigator.infrastructure.max_api.schemas import NewMessageBody
 
 
 @pytest.mark.asyncio
@@ -69,3 +72,19 @@ async def test_callback_answer_contract() -> None:
     ) as http:
         client = MaxApiClient("token", client=http)
         assert (await client.answer_callback("callback-1", message="Готово"))["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_callback_answer_can_clear_inline_keyboard() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert json.loads(request.content) == {"message": {"text": "✓ Выбрано", "attachments": []}}
+        return httpx.Response(200, json={"success": True})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="https://platform-api2.max.ru"
+    ) as http:
+        client = MaxApiClient("token", client=http)
+        await client.answer_callback(
+            "callback-1", message=NewMessageBody(text="✓ Выбрано", attachments=[])
+        )

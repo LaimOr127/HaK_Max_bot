@@ -1,6 +1,11 @@
 from navigator.presentation.maxbot.callbacks import parse_callback
 from navigator.presentation.maxbot.keyboards import WELCOME_BACK
-from navigator.presentation.maxbot.runtime import Incoming, _extract_incoming, _looks_like_inn
+from navigator.presentation.maxbot.runtime import (
+    Incoming,
+    _callback_summary,
+    _extract_incoming,
+    _looks_like_inn,
+)
 
 
 def test_extract_incoming_reads_max_message_body_text() -> None:
@@ -27,3 +32,7 @@ def test_manual_region_cannot_treat_an_inn_as_a_region() -> None:
 def test_saved_profile_actions_keep_recommendations_and_editing_distinct() -> None:
     assert parse_callback("nav:recommend").action == "nav:recommend"
     assert WELCOME_BACK[0]["payload"]["buttons"][0][0]["payload"] == "nav:recommend"
+
+
+def test_callback_summary_keeps_selected_profile_values_readable() -> None:
+    assert _callback_summary(parse_callback("sphere:it_digital")) == "IT и цифровые услуги"
