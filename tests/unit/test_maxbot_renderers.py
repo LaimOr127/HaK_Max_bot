@@ -28,7 +28,7 @@ def test_profile_uses_human_labels_for_fns_data() -> None:
     )
 
     assert "Регион: Москва (77)" in text
-    assert "Форма: ООО" in text
+    assert "Форма: юридическое лицо" in text
     assert "Основной ОКВЭД: 62.01" in text
     assert "Сфера: IT и цифровые услуги" in text
     assert "Этап бизнеса: больше 3 лет" in text
@@ -41,7 +41,10 @@ def test_measure_uses_human_support_level_and_reason() -> None:
     measure = type(
         "Measure",
         (),
-        {"name": "Мера", "support_level": "federal", "amount_display": "Подбор программ", "benefit_detail": None},
+        {
+            "name": "Мера", "support_level": "federal",
+            "amount_display": "Подбор программ", "benefit_detail": None,
+        },
     )()
 
     text = render_measure(measure, ("Форма бизнеса подходит",))

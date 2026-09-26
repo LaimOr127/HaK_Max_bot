@@ -1,86 +1,179 @@
-# Навигатор льгот и субсидий
+# Навигатор льгот и субсидий для MAX
 
-Bot-first MVP for MAX: a small-business owner answers a short dialog, gets 1-3 suitable support measures, saves one to a checklist, and tracks documents later.
+Bot-first MVP для MAX: предприниматель вводит ИНН или заполняет профиль вручную,
+получает подходящие меры поддержки, добавляет их в чек-лист и может сравнить две
+меры в miniapp.
 
-The optional mini-app compares two measures selected by the bot and uses the same checklist.
+Проект уже содержит backend, MAX-бота, static miniapp, импорт каталога, миграции,
+Docker Compose для локального и production запуска.
 
-```mermaid
-flowchart TD
-    MAX[MAX User] --> MAXAPI[MAX Platform]
-    MAXAPI --> BOT[Bot/API Container]
-    BOT --> APP[Application Services]
-    APP --> MATCH[Deterministic Matching]
-    APP --> DB[(PostgreSQL)]
-    APP --> REDIS[(Redis)]
-    APP --> FNS[FNS Adapter]
-    APP --> EXPLAIN[Explanation Provider]
-    FNS --> RMSP[Public FNS/RMSP source]
-    FNS -. fallback .-> PB[Transparent Business public search]
-    EXPLAIN --> TEMPLATE[Template]
-    EXPLAIN -. feature flag .-> OR[OpenRouter]
-    WORKER[Worker Container] --> DB
-    WORKER --> MAXAPI
-    CADDY[Caddy HTTPS] --> BOT
-    MINI[MAX Mini App] --> BOT
-```
+## Что работает
 
-## Quick Start
+- MAX-бот: `/start`, `/help`, `/profile`, `/checklist`, `/reset`.
+- Онбординг по ИНН с FNS/RMSP enrichment и ручным fallback.
+- Ручные кнопки профиля: форма бизнеса, сфера, стадия, сотрудники.
+- Детерминированный подбор мер по региону, сфере, форме, стадии, МСП и сотрудникам.
+- Карточки мер, подробности, чек-лист документов, feedback по мере.
+- Miniapp: домашний экран, сравнение двух мер, добавление/удаление из чек-листа.
+- Polling для локальной разработки и webhook для production.
+- Alembic migrations, PostgreSQL, Redis, Caddy HTTPS в production.
+
+## Быстрый локальный запуск
+
+Требования: Docker Compose v2, Python 3.12 и `uv` для локальных команд без Docker.
 
 ```bash
 cp .env.example .env
 docker compose up -d --build
-make seed-demo
 curl http://localhost:8000/health/live
 curl http://localhost:8000/health/ready
 ```
 
-Local compose starts PostgreSQL, Redis, migrations, the API/bot, and the reminder worker. MAX polling is configured through `MAX_TRANSPORT=polling`; real MAX calls require `MAX_BOT_TOKEN`. For local Python checks, run `uv sync --extra dev` once.
+`compose.yml` поднимает `postgres`, `redis`, `migrate`, `catalog`, `bot` и
+`worker`. Docker Compose v2 сам видит файл `compose.yml`, поэтому флаг `-f` для
+локального запуска не нужен.
 
-The mini-app entry is `/miniapp` (the older `/miniapp/compare` URL remains available). Publish `/miniapp` over HTTPS, attach that URL to the existing bot in the MAX partner settings, and choose the native **Старт** launch button. Then set `MINIAPP_ENABLED=true` and `MINIAPP_COMPARE_URL=https://your-host/miniapp` (the variable name is retained for compatibility). `/start` sends a single mini-app entry when integration is enabled; MAX does not document automatic WebView opening from a bot command. The same page shows the home menu on a normal launch and comparison for a signed `compare_...` launch. Profile data is available only with signed MAX Bridge init data. Without a public HTTPS URL and partner registration, keep the feature disabled and use the chat flow.
-
-## Commands
-
-- `make build`, `make up`, `make down`, `make restart`, `make logs`, `make ps` wrap Compose.
-- `make migrate` runs Alembic.
-- `make lint`, `make format`, `make typecheck`, `make test` run local quality checks.
-- `make seed-demo` loads the included demo catalogue; `make validate-data` and `make import-data` validate/import a curated CSV.
-- `make max-smoke` checks the configured MAX token; `make webhook-register`, `make webhook-list`, and `make webhook-delete` manage subscriptions.
-
-## Environment
-
-Secrets live only in `.env` or deployment secret storage. `.env.example` contains placeholders for PostgreSQL, Redis, MAX, FNS, OpenRouter, mini-app, reminders, and debug toggles.
-
-OpenRouter is off by default and must never decide eligibility. Measures and courses are manually curated data, not a live МСП.РФ API. The included 29-measure catalogue is synthetic MVP data from `table1.xlsx`: it demonstrates the selection flow and must be replaced or independently verified before production. FNS is best-effort profile enrichment with a manual dialog fallback.
-
-## External Contracts
-
-- MAX API base URL is `https://platform-api2.max.ru`. Requests use raw `Authorization: <MAX_BOT_TOKEN>`, never token query parameters.
-- MAX webhook requests are authenticated with `X-Max-Bot-Api-Secret`. The webhook handler must respond `200` within 30 seconds; duplicate delivery must return `200` without repeated side effects.
-- FNS enrichment checks the official SME register at `https://www.nalog.gov.ru/opendata/7707329152-rsmp/` first, then the public Transparent Business search as a best-effort fallback for entities outside the SME register. There is no documented official per-INN REST API in scope.
-- Any internal `search-proc.json` endpoint is best-effort only; the product must keep manual fallback.
-- OpenRouter uses `/api/v1/chat/completions` with Bearer auth, provider `ZDR`, and data collection disabled; it remains disabled by default.
-
-## Migrations
-
-Alembic owns schema changes:
+Если нужен локальный Python workflow:
 
 ```bash
-docker compose run --rm migrate
+UV_CACHE_DIR=.uv-cache uv sync --extra dev
+make test
+make lint
+make typecheck
 ```
 
-The initial migration creates all core persistence tables from the specification.
+## Основные команды
 
-## Production
+| Команда | Что делает |
+| --- | --- |
+| `make up` | Собирает и запускает локальный Compose stack |
+| `make down` | Останавливает локальный stack |
+| `make logs` | Показывает логи сервисов |
+| `make ps` | Показывает состояние контейнеров |
+| `make migrate` | Запускает Alembic migrations |
+| `make seed-demo` | Загружает справочники, demo-каталог и current-каталог |
+| `make validate-data` | Валидирует `data/measures.example.csv` |
+| `make import-data` | Импортирует `data/measures.csv`, если файл добавлен |
+| `make max-smoke` | Проверяет текущий `MAX_BOT_TOKEN` |
+| `make webhook-register` | Регистрирует webhook в MAX |
+| `make webhook-list` | Показывает webhook subscriptions |
+| `make webhook-delete` | Удаляет webhook subscription |
 
-Production combines local and prod files:
+## Переменные окружения
+
+Скопируйте `.env.example` в `.env` и заполните только то, что нужно для режима.
+Секреты не коммитятся.
+
+| Переменная | Когда нужна | Назначение |
+| --- | --- | --- |
+| `APP_ENV` | всегда | `local`, `test` или `production` |
+| `DATABASE_URL` | всегда | Async SQLAlchemy URL PostgreSQL |
+| `REDIS_URL` | всегда | Redis URL для cache/idempotency |
+| `MAX_BOT_TOKEN` | для реального бота | Токен MAX-бота |
+| `MAX_TRANSPORT` | всегда | `polling` локально, `webhook` в production |
+| `MAX_WEBHOOK_PUBLIC_URL` | webhook | Публичный HTTPS origin, например `https://example.ru` |
+| `MAX_WEBHOOK_PUBLIC_HOST` | Caddy | Домен для Caddy virtual host |
+| `MAX_WEBHOOK_SECRET` | webhook | Секрет заголовка `X-Max-Bot-Api-Secret` |
+| `FNS_PROVIDER` | опционально | `rmsp_portal`, `local_snapshot` или `mock` |
+| `OPENROUTER_ENABLED` | опционально | Включает LLM explanation fallback |
+| `MINIAPP_ENABLED` | miniapp | Включает open_app-кнопки и API miniapp |
+| `MINIAPP_COMPARE_URL` | miniapp | URL miniapp, сейчас используется как feature guard |
+| `REMINDERS_ENABLED` | worker | Включает напоминания по дедлайнам |
+| `CADDY_EMAIL` | production | Email для Let's Encrypt |
+
+`Settings` валидирует опасные комбинации: webhook требует `MAX_BOT_TOKEN`,
+`MAX_WEBHOOK_PUBLIC_URL` и `MAX_WEBHOOK_SECRET`; miniapp требует
+`MINIAPP_COMPARE_URL`; OpenRouter требует ключ и модель.
+
+## Интеграция с MAX
+
+Локально используйте polling:
+
+```env
+MAX_TRANSPORT=polling
+MAX_BOT_TOKEN=<token>
+MINIAPP_ENABLED=false
+```
+
+В production используйте webhook:
+
+```env
+APP_ENV=production
+MAX_TRANSPORT=webhook
+MAX_BOT_TOKEN=<token>
+MAX_WEBHOOK_PUBLIC_URL=https://<domain>
+MAX_WEBHOOK_PUBLIC_HOST=<domain>
+MAX_WEBHOOK_SECRET=<random-secret>
+MINIAPP_ENABLED=true
+MINIAPP_COMPARE_URL=https://<domain>/miniapp
+```
+
+MAX API вызывается через `https://platform-api2.max.ru` с raw заголовком
+`Authorization: <MAX_BOT_TOKEN>`. Webhook принимает оба пути:
+`POST /webhook/max` и `POST /webhooks/max`.
+
+## Miniapp
+
+Публичная страница:
+
+- `GET /miniapp`
+- `GET /miniapp/compare`
+
+API miniapp:
+
+- `GET /api/miniapp/home`
+- `GET /api/miniapp/compare?ids=<uuid>,<uuid>`
+- `POST /api/miniapp/checklist/{measure_id}`
+- `DELETE /api/miniapp/checklist/{measure_id}`
+
+Все API miniapp требуют заголовок `X-Max-Init-Data`. Backend проверяет подпись
+MAX Bridge init data через `MAX_BOT_TOKEN`, срок действия `auth_date` и
+`start_param` для comparison launch.
+
+Чтобы miniapp открывался из MAX:
+
+1. Опубликуйте backend по HTTPS.
+2. Укажите `https://<domain>/miniapp` в настройках бота/miniapp MAX.
+3. Включите `MINIAPP_ENABLED=true`.
+4. Укажите `MINIAPP_COMPARE_URL=https://<domain>/miniapp`.
+5. Перезапустите `bot`.
+
+Без регистрации публичного HTTPS URL MAX не сможет открыть miniapp и передать
+подписанный init data. Сам API включается переменной `MINIAPP_ENABLED`, но
+защищенные методы принимают только валидный `X-Max-Init-Data`. Основной chat
+flow остается рабочим.
+
+## Каталог мер
+
+Данные лежат в `data/`.
+
+- `measures.example.csv` содержит synthetic demo-меры для локальной разработки.
+- `measures.current.csv` содержит curated меры для production/MVP.
+- `sphere_categories.csv` и `okved_mapping.csv` нужны для профиля и маппинга ОКВЭД.
+- `courses.example.csv` сидится как справочник курсов.
+
+Локально `catalog` импортирует demo plus current данные. В `APP_ENV=production`
+demo-меры отключаются, и импортируется только `measures.current.csv`.
+
+Валидация CSV:
+
+```bash
+PYTHONPATH=src UV_CACHE_DIR=.uv-cache uv run python -m navigator.infrastructure.data.import_measures --file data/measures.example.csv --validate-only
+PYTHONPATH=src UV_CACHE_DIR=.uv-cache uv run python -m navigator.infrastructure.data.import_measures --file data/measures.current.csv --validate-only
+```
+
+## Production deploy
+
+Production Compose запускается так:
 
 ```bash
 docker compose -f compose.yml -f compose.prod.yml up -d --build
 ```
 
-`compose.prod.yml` switches MAX to webhook mode, adds Caddy, and does not publish PostgreSQL or Redis ports. Fill `MAX_WEBHOOK_PUBLIC_URL`, `MAX_WEBHOOK_SECRET`, and real secrets before deploy.
+`compose.prod.yml` включает webhook mode, Caddy, скрывает порты PostgreSQL/Redis
+и включает reminder worker.
 
-For the configured VPS, create an A record for `svadba-2026.ru` pointing to `193.5.251.40`, clone this repository, then run as `root`:
+Для подготовленного VPS можно использовать script:
 
 ```bash
 git clone https://github.com/LaimOr127/HaK_Max_bot.git benefit-navigator
@@ -88,8 +181,59 @@ cd benefit-navigator
 ./scripts/production-setup.sh
 ```
 
-The script securely prompts only for `MAX_BOT_TOKEN` and `CADDY_EMAIL`, generates all other runtime secrets in the ignored `.env`, starts production Compose, checks HTTPS health, verifies the MAX token, and registers the webhook.
+Script:
 
-## Known Limitations
+- требует запуск от `root`;
+- ожидает, что домен из `MAX_WEBHOOK_PUBLIC_HOST` резолвится в `EXPECTED_PUBLIC_IP`;
+- спрашивает `MAX_BOT_TOKEN` и `CADDY_EMAIL`;
+- генерирует `POSTGRES_PASSWORD` и `MAX_WEBHOOK_SECRET`;
+- создает `.env` с правами `0600`;
+- запускает production Compose;
+- проверяет `https://<domain>/health/ready`;
+- запускает MAX smoke-check и регистрирует webhook.
 
-The bot path is implemented: onboarding, deterministic recommendations, details, checklists, feedback, investor lead capture, webhook/polling transport, idempotency, import, and reminders. The supplied support catalogue is synthetic, so results are not a legal eligibility decision and must be checked at the linked source. The mini-app API and page are wired locally, but opening it from MAX additionally requires a registered public HTTPS URL.
+По умолчанию script использует:
+
+- `MAX_WEBHOOK_PUBLIC_HOST=svadba-2026.ru`
+- `EXPECTED_PUBLIC_IP=193.5.251.40`
+
+Для другого домена задайте переменные перед запуском:
+
+```bash
+MAX_WEBHOOK_PUBLIC_HOST=example.ru EXPECTED_PUBLIC_IP=203.0.113.10 ./scripts/production-setup.sh
+```
+
+## Проверка после запуска
+
+```bash
+docker compose ps
+curl http://localhost:8000/health/live
+curl http://localhost:8000/health/ready
+```
+
+Для production:
+
+```bash
+docker compose -f compose.yml -f compose.prod.yml ps
+curl https://<domain>/health/live
+curl https://<domain>/health/ready
+```
+
+Для smoke-check MAX:
+
+```bash
+make max-smoke
+```
+
+## Ограничения
+
+- Рекомендации не являются юридическим решением о праве на меру.
+- FNS/RMSP enrichment best-effort; ручное заполнение профиля обязательно должно
+  оставаться рабочим fallback.
+- OpenRouter выключен по умолчанию и не принимает решения о eligibility.
+- Miniapp открывается из MAX только при публичном HTTPS URL, регистрации в MAX
+  и валидном `X-Max-Init-Data`.
+- Current production-каталог сейчас небольшой: расширение идет через CSV и
+  повторную валидацию источников.
+
+Подробная схема системы описана в `ARCHITECTURE.md`.

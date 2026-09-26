@@ -207,7 +207,11 @@ class MaxBotDispatcher:
         outgoing = [
             _message(
                 max_user_id,
-                render_measure(recommendation, recommendation.reasons),
+                (
+                    "⚠️ Нужно уточнить условия: данных профиля пока недостаточно.\n\n"
+                    if recommendation.status is MatchStatus.NEEDS_MORE_INFO
+                    else ""
+                ) + render_measure(recommendation, recommendation.reasons),
                 keyboards.measure(str(recommendation.measure_id)),
             )
             for recommendation in recommendations

@@ -421,7 +421,7 @@
 
 <div class="toast" id="toast" hidden></div>
 
-<script src="https://st.max.ru/js/max-web-app.js"></script>
+<script src="https://st.max.ru/js/max-web-app.js" async></script>
 <script>
 (() => {
   const api = {
@@ -429,29 +429,50 @@
     compare: "/api/miniapp/compare",
     checklist: id => `/api/miniapp/checklist/${encodeURIComponent(id)}`
   };
-  const webApp = window.WebApp || null;
-  const initData = webApp && typeof webApp.initData === "string" ? webApp.initData : "";
   const stateEl = document.getElementById("state");
   const homeEl = document.getElementById("home");
   const compareEl = document.getElementById("compare");
   const detailsEl = document.getElementById("details");
   const subtitleEl = document.getElementById("subtitle");
   const toastEl = document.getElementById("toast");
+  let webApp = null;
+  let initData = "";
   let measures = [];
+  let activeCompareIds = [];
   let busyId = null;
   let confirmId = null;
 
   document.getElementById("close-btn").addEventListener("click", closeApp);
 
+  function bridge() {
+    return window.WebApp || (window.Max && window.Max.WebApp) || null;
+  }
+
+  function queryValue(name) {
+    const search = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    return search.get(name) || hash.get(name) || "";
+  }
+
+  function readInitData() {
+    webApp = bridge();
+    initData = webApp && typeof webApp.initData === "string" ? webApp.initData : "";
+    initData = initData || queryValue("WebAppData") || queryValue("init_data") || queryValue("tgWebAppData") || queryValue("maxWebAppData");
+  }
+
   function idsFromStartParam() {
-    const startParam = webApp && webApp.initDataUnsafe && typeof webApp.initDataUnsafe.start_param === "string"
+    readInitData();
+    const fromBridge = webApp && webApp.initDataUnsafe && typeof webApp.initDataUnsafe.start_param === "string"
       ? webApp.initDataUnsafe.start_param
       : "";
+    const fromSignedData = new URLSearchParams(initData).get("start_param") || "";
+    const startParam = fromBridge || fromSignedData || queryValue("start_param");
     const match = startParam.match(/^compare_([0-9a-fA-F-]{36})_([0-9a-fA-F-]{36})$/);
     return match ? [match[1], match[2]] : [];
   }
 
   function headers() {
+    readInitData();
     return { "X-Max-Init-Data": initData };
   }
 
@@ -473,8 +494,9 @@
     subtitleEl.textContent = "Загрузка...";
   }
 
-  async function loadCompare(keepDetailsId = null) {
-    const ids = idsFromStartParam();
+  async function loadCompare(keepDetailsId = null, selectedIds = null) {
+    readInitData();
+    const ids = selectedIds || idsFromStartParam();
     if (!initData) {
       showState("Откройте из MAX", "Мини-приложение получает доступ к профилю только при запуске из чата.");
       return;
@@ -484,6 +506,7 @@
       return;
     }
 
+    activeCompareIds = ids;
     showLoading();
     try {
       const url = `${api.compare}?ids=${encodeURIComponent(ids.join(","))}`;
@@ -503,6 +526,7 @@
   }
 
   async function loadHome() {
+    readInitData();
     if (!initData) {
       showState("Откройте из MAX", "Мини-приложение получает доступ к профилю только при запуске из чата.");
       return;
@@ -547,6 +571,7 @@
         <div class="home-card-head"><h2>Персональные меры</h2></div>
         <div class="home-body">
           ${recommendations.length ? `<div class="recommendations">${recommendations.map(renderHomeRecommendation).join("")}</div>` : `<p class="profile-text">Пока нет подходящих мер. Уточните профиль в чате, чтобы расширить подбор.</p>`}
+          ${recommendations.length >= 2 ? '<button class="btn btn-primary" type="button" data-home-compare>Сравнить первые две меры</button>' : ""}
         </div>
       </section>
 
@@ -557,6 +582,10 @@
         </div>
       </section>
     `;
+    const compareButton = homeEl.querySelector("[data-home-compare]");
+    if (compareButton) compareButton.addEventListener("click", () => {
+      loadCompare(null, recommendations.slice(0, 2).map(item => item.id));
+    });
   }
 
   function renderHomeRecommendation(m) {
@@ -566,6 +595,7 @@
         <span class="badge">${escapeHtml(levelName(m.support_level))}</span>
         <div class="recommendation-title">${escapeHtml(m.name || "Мера поддержки")}</div>
         <div class="recommendation-amount">${escapeHtml(m.amount_display || "Сумма уточняется")}</div>
+        ${m.status === "NEEDS_MORE_INFO" ? '<p class="home-note">Нужно уточнить условия программы перед подачей.</p>' : ""}
         ${reasons.length ? `<ul class="reason-list">${reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : ""}
       </article>
     `;
@@ -579,6 +609,8 @@
     document.querySelector("h1").textContent = "Сравнение мер";
     subtitleEl.textContent = "2 меры из вашего подбора";
     compareEl.innerHTML = measures.map(renderMeasure).join("");
+    compareEl.insertAdjacentHTML("afterbegin", '<button class="btn" type="button" data-home-back>← К подбору</button>');
+    compareEl.querySelector("[data-home-back]").addEventListener("click", loadHome);
     compareEl.querySelectorAll("[data-open]").forEach(btn => {
       btn.addEventListener("click", () => renderDetails(btn.dataset.open));
     });
@@ -692,11 +724,12 @@
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       busyId = null;
       confirmId = null;
-      await loadCompare(id);
+      await loadCompare(id, activeCompareIds);
       showToast(wasChecklisted ? "Убрано из чек-листа" : "Добавлено в чек-лист");
     } catch (err) {
       busyId = null;
       showToast("Не удалось обновить чек-лист. Попробуйте ещё раз.");
+      confirmId = null;
       renderCompare();
       if (!detailsEl.hidden) renderDetails(id, false);
     } finally {
@@ -730,6 +763,7 @@
   }
 
   function closeApp() {
+    readInitData();
     if (webApp && typeof webApp.close === "function") {
       webApp.close();
       return;
@@ -750,7 +784,21 @@
     return escapeHtml(value).replaceAll("`", "&#096;");
   }
 
-  loadCompare();
+  async function boot() {
+    showLoading();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      readInitData();
+      if (initData) break;
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+    await loadCompare();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
 })();
 </script>
 </body>

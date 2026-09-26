@@ -31,7 +31,9 @@ async def compare_page() -> HTMLResponse:
     return HTMLResponse(_PAGE.read_text(encoding="utf-8"))
 
 
-def verify_user_data(raw: str | None, token: str, *, now: int | None = None) -> tuple[int, dict[str, str]]:
+def verify_user_data(
+    raw: str | None, token: str, *, now: int | None = None
+) -> tuple[int, dict[str, str]]:
     """Verify signed MAX Bridge data before trusting the user."""
     if not raw or len(raw) > 8192:
         raise HTTPException(401, "invalid MAX init data")
@@ -58,7 +60,9 @@ def verify_user_data(raw: str | None, token: str, *, now: int | None = None) -> 
         raise HTTPException(401, "invalid MAX init data") from exc
 
 
-def verify_init_data(raw: str | None, token: str, *, now: int | None = None) -> tuple[int, tuple[UUID, UUID]]:
+def verify_init_data(
+    raw: str | None, token: str, *, now: int | None = None
+) -> tuple[int, tuple[UUID, UUID]]:
     """Verify a comparison launch payload as well as the MAX user."""
     user_id, data = verify_user_data(raw, token, now=now)
     match = _START.fullmatch(data.get("start_param", ""))
@@ -71,7 +75,9 @@ def verify_init_data(raw: str | None, token: str, *, now: int | None = None) -> 
 
 
 @router.get("/api/miniapp/home")
-async def home_data(request: Request, x_max_init_data: str | None = Header(default=None)) -> dict[str, object]:
+async def home_data(
+    request: Request, x_max_init_data: str | None = Header(default=None)
+) -> dict[str, object]:
     from navigator.bootstrap import settings
 
     if not settings.miniapp_enabled or settings.max_bot_token is None:
@@ -82,10 +88,15 @@ async def home_data(request: Request, x_max_init_data: str | None = Header(defau
         profile = await bundle.profiles.get_by_user(user_id)
         complete = profile is not None and _missing_profile_step(profile) is None
         recommendations = (
-            await RecommendationService(bundle.profiles, bundle.measures, SystemClock()).recommend_for_user(user_id, limit=5)
-            if complete else ()
+            await RecommendationService(
+                bundle.profiles, bundle.measures, SystemClock()
+            ).recommend_for_user(user_id, limit=5)
+            if complete
+            else ()
         )
-        checklist = await ChecklistService(bundle.checklists, bundle.measures).list_checklists(user_id)
+        checklist = await ChecklistService(bundle.checklists, bundle.measures).list_checklists(
+            user_id
+        )
     return {
         "profile_text": render_profile(profile).split("\n\nВсё верно")[0] if profile else None,
         "profile_complete": complete,
@@ -95,6 +106,7 @@ async def home_data(request: Request, x_max_init_data: str | None = Header(defau
                 "name": item.name,
                 "amount_display": item.amount_display,
                 "support_level": item.support_level,
+                "status": item.status.value,
                 "reasons": list(item.reasons),
             }
             for item in recommendations
@@ -106,23 +118,27 @@ async def home_data(request: Request, x_max_init_data: str | None = Header(defau
     }
 
 
-async def _authorized(request: Request, raw: str | None) -> tuple[int, tuple[UUID, UUID]]:
+async def _authorized(request: Request, raw: str | None) -> tuple[int, tuple[UUID, ...], bool]:
     from navigator.bootstrap import settings
 
     if not settings.miniapp_enabled or settings.max_bot_token is None:
         raise HTTPException(503, "mini-app is not configured")
-    user_id, ids = verify_init_data(raw, settings.max_bot_token.get_secret_value())
+    token = settings.max_bot_token.get_secret_value()
+    user_id, data = verify_user_data(raw, token)
+    comparison_launch = data.get("start_param", "").startswith("compare_")
+    signed_ids = verify_init_data(raw, token)[1] if comparison_launch else None
     repos = SqlAlchemyRepositories(request.app.state.db_sessionmaker)
     async with repos.session() as bundle:
         try:
             suggestions = await RecommendationService(
                 bundle.profiles, bundle.measures, SystemClock()
-            ).recommend_for_user(user_id)
+            ).recommend_for_user(user_id, limit=5)
         except ProfileIncomplete as exc:
             raise HTTPException(403, "profile is incomplete") from exc
-        if not set(ids).issubset({item.measure_id for item in suggestions}):
+        recommended_ids = tuple(item.measure_id for item in suggestions)
+        if signed_ids is not None and not set(signed_ids).issubset(recommended_ids):
             raise HTTPException(403, "measures are not recommended for this profile")
-    return user_id, ids
+    return user_id, signed_ids or recommended_ids, comparison_launch
 
 
 @router.get("/api/miniapp/compare")
@@ -131,19 +147,25 @@ async def compare_data(
     ids: str = Query(),
     x_max_init_data: str | None = Header(default=None),
 ) -> dict[str, object]:
-    user_id, signed_ids = await _authorized(request, x_max_init_data)
+    user_id, allowed_ids, comparison_launch = await _authorized(request, x_max_init_data)
     try:
         requested = tuple(UUID(part) for part in ids.split(","))
     except ValueError as exc:
         raise HTTPException(400, "invalid measure ids") from exc
-    if requested != signed_ids:
-        raise HTTPException(403, "measure ids do not match launch payload")
+    if len(requested) != 2 or requested[0] == requested[1]:
+        raise HTTPException(400, "two distinct measures are required")
+    if (comparison_launch and requested != allowed_ids) or not set(requested).issubset(
+        allowed_ids
+    ):
+        raise HTTPException(403, "measures are not available for this launch")
     repos = SqlAlchemyRepositories(request.app.state.db_sessionmaker)
     async with repos.session() as bundle:
-        checklist = await ChecklistService(bundle.checklists, bundle.measures).list_checklists(user_id)
+        checklist = await ChecklistService(bundle.checklists, bundle.measures).list_checklists(
+            user_id
+        )
         checked = {entry.measure_id for entry in checklist.checklists}
         result = []
-        for measure_id in signed_ids:
+        for measure_id in requested:
             measure = await bundle.measures.get(measure_id)
             if measure is None:
                 raise HTTPException(404, "measure not found")
@@ -170,7 +192,7 @@ async def change_checklist(
     request: Request,
     x_max_init_data: str | None = Header(default=None),
 ) -> dict[str, bool]:
-    user_id, ids = await _authorized(request, x_max_init_data)
+    user_id, ids, _ = await _authorized(request, x_max_init_data)
     if measure_id not in ids:
         raise HTTPException(403, "measure is not in this comparison")
     adding = request.method == "POST"
@@ -186,7 +208,9 @@ async def change_checklist(
     if client is not None and measure is not None:
         try:
             action = "добавлена в чек-лист" if adding else "удалена из чек-листа"
-            await client.send_message(NewMessageBody(text=f"«{measure.name}» {action}."), user_id=user_id)
+            await client.send_message(
+                NewMessageBody(text=f"«{measure.name}» {action}."), user_id=user_id
+            )
         except Exception:
             import logging
 

@@ -63,12 +63,15 @@ def render_profile(profile: Any) -> str:
     region = _REGION_LABELS.get(str(region), str(region)) if region else "не указан"
     okved = getattr(profile, "primary_okved", None)
     okved_line = f"Основной ОКВЭД: {okved}\n" if okved else ""
+    form = _profile_value(profile, "business_form", "уточним далее")
+    if source == "ФНС" and form == "ООО":
+        form = "юридическое лицо"
     return (
         "Проверьте профиль:\n\n"
         f"Компания: {getattr(profile, 'company_name', None) or 'не указано'}\n"
         f"ИНН: {getattr(profile, 'inn', None) or 'не указан'}\n"
         f"Регион: {region}\n"
-        f"Форма: {_profile_value(profile, 'business_form', 'уточним далее')}\n"
+        f"Форма: {form}\n"
         f"{okved_line}"
         f"Сфера: {sphere}\n"
         f"Этап бизнеса: {_profile_value(profile, 'business_stage', 'уточним далее')}\n"
@@ -110,6 +113,5 @@ def render_measure_details(measure: Any, documents: Iterable[Any]) -> str:
         f"Документы\n{docs}\n\nКуда подавать\n{measure.where_to_apply}\n\n"
         f"Срок рассмотрения\n{getattr(measure, 'review_days', None) or 'зависит от программы'}\n\n"
         f"Срок подачи\n{deadline_text}\n\nИсточник\n{measure.source_name}\n{measure.source_url}\n\n"
-        "По данным профиля мера соответствует указанным структурированным критериям. "
-        "Перед подачей проверьте актуальные условия в первоисточнике."
+        "Перед подачей проверьте соответствие всем условиям и их актуальность в первоисточнике."
     )

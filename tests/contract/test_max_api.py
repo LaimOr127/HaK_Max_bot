@@ -93,7 +93,7 @@ async def test_callback_answer_can_clear_inline_keyboard() -> None:
 @pytest.mark.asyncio
 async def test_callback_answer_can_acknowledge_without_replacing_message() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
-        assert json.loads(request.content) == {}
+        assert json.loads(request.content) == {"notification": "Принято"}
         return httpx.Response(200, json={"success": True})
 
     transport = httpx.MockTransport(handler)

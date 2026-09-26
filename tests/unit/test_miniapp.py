@@ -58,7 +58,11 @@ def test_home_launch_verifies_user_without_comparison_payload() -> None:
         "payload": "home",
     }
     with pytest.raises(HTTPException):
-        verify_user_data(signed_data(start="home").replace("id%22%3A42", "id%22%3A43"), "token", now=1000)
+        verify_user_data(
+            signed_data(start="home").replace("id%22%3A42", "id%22%3A43"),
+            "token",
+            now=1000,
+        )
 
 
 @pytest.mark.parametrize(
@@ -79,14 +83,21 @@ def test_max_signature_rejects_tampering_expiry_and_invalid_payload(raw: str, no
 
 @pytest.mark.asyncio
 async def test_miniapp_page_is_served_without_mock_data() -> None:
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.get("/miniapp/compare")
         home_response = await client.get("/miniapp")
     assert response.status_code == 200
     assert home_response.status_code == 200
     assert "/api/miniapp/home" in home_response.text
-    assert "https://st.max.ru/js/max-web-app.js" in response.text
+    assert '<script src="https://st.max.ru/js/max-web-app.js" async></script>' in response.text
     assert "/api/miniapp/compare" in response.text
+    assert "window.Max && window.Max.WebApp" in response.text
+    assert 'queryValue("WebAppData")' in response.text
+    assert 'queryValue("init_data")' in response.text
+    assert 'new URLSearchParams(initData).get("start_param")' in response.text
+    assert 'data-home-compare' in response.text
     assert "Субсидия на оборудование" not in response.text
 
 
@@ -115,7 +126,9 @@ async def test_home_api_uses_signed_user_profile(monkeypatch) -> None:
 
     class RepoSession:
         async def __aenter__(self):
-            return SimpleNamespace(profiles=Profiles(), measures=Measures(), checklists=Checklists())
+            return SimpleNamespace(
+                profiles=Profiles(), measures=Measures(), checklists=Checklists()
+            )
 
         async def __aexit__(self, *args):
             return None
@@ -129,7 +142,9 @@ async def test_home_api_uses_signed_user_profile(monkeypatch) -> None:
 
     monkeypatch.setattr(miniapp, "SqlAlchemyRepositories", Repos)
     monkeypatch.setattr(
-        bootstrap, "settings", SimpleNamespace(miniapp_enabled=True, max_bot_token=SecretStr("token"))
+        bootstrap,
+        "settings",
+        SimpleNamespace(miniapp_enabled=True, max_bot_token=SecretStr("token")),
     )
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db_sessionmaker=None)))
     result = await miniapp.home_data(
@@ -138,6 +153,47 @@ async def test_home_api_uses_signed_user_profile(monkeypatch) -> None:
     assert result["profile_complete"] is True
     assert "Компания" in result["profile_text"]
     assert result["recommendations"] == []
+
+
+@pytest.mark.asyncio
+async def test_home_launch_can_compare_only_recommended_measures(monkeypatch) -> None:
+    class RepoSession:
+        async def __aenter__(self):
+            return SimpleNamespace(profiles=None, measures=None)
+
+        async def __aexit__(self, *args):
+            return None
+
+    class Repos:
+        def __init__(self, sessionmaker):
+            pass
+
+        def session(self):
+            return RepoSession()
+
+    class Recommendations:
+        def __init__(self, *args):
+            pass
+
+        async def recommend_for_user(self, user_id, limit):
+            assert user_id == 42 and limit == 5
+            return [SimpleNamespace(measure_id=FIRST), SimpleNamespace(measure_id=SECOND)]
+
+    monkeypatch.setattr(miniapp, "SqlAlchemyRepositories", Repos)
+    monkeypatch.setattr(miniapp, "RecommendationService", Recommendations)
+    monkeypatch.setattr(
+        bootstrap,
+        "settings",
+        SimpleNamespace(miniapp_enabled=True, max_bot_token=SecretStr("token")),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db_sessionmaker=None)))
+    now = int(time.time())
+    assert await miniapp._authorized(request, signed_data(start="home", auth_date=now)) == (
+        42, (FIRST, SECOND), False
+    )
+    assert await miniapp._authorized(request, signed_data(auth_date=now)) == (
+        42, (FIRST, SECOND), True
+    )
 
 
 @pytest.mark.asyncio
@@ -184,7 +240,7 @@ async def test_compare_api_returns_only_signed_measures_and_shared_checklist(mon
             return RepoSession()
 
     async def authorized(request, raw):
-        return 42, (FIRST, SECOND)
+        return 42, (FIRST, SECOND), True
 
     monkeypatch.setattr(miniapp, "_authorized", authorized)
     monkeypatch.setattr(miniapp, "SqlAlchemyRepositories", Repos)
@@ -194,4 +250,13 @@ async def test_compare_api_returns_only_signed_measures_and_shared_checklist(mon
     assert [item["checklisted"] for item in response["measures"]] == [True, False]
     with pytest.raises(HTTPException) as exc:
         await miniapp.compare_data(request, f"{SECOND},{FIRST}")
+    assert exc.value.status_code == 403
+    async def authorized_home(request, raw):
+        return 42, (FIRST, SECOND), False
+
+    monkeypatch.setattr(miniapp, "_authorized", authorized_home)
+    home_response = await miniapp.compare_data(request, f"{SECOND},{FIRST}")
+    assert [item["id"] for item in home_response["measures"]] == [str(SECOND), str(FIRST)]
+    with pytest.raises(HTTPException) as exc:
+        await miniapp.compare_data(request, f"{FIRST},33333333-3333-4333-8333-333333333333")
     assert exc.value.status_code == 403

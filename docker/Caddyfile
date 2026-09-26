@@ -8,10 +8,15 @@
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "geolocation=(), microphone=(), camera=()"
 	}
-
-	reverse_proxy bot:8000
+	@miniapp path /miniapp /miniapp/compare
+	handle @miniapp {
+		reverse_proxy bot:8000
+	}
+	handle {
+		header X-Frame-Options "DENY"
+		reverse_proxy bot:8000
+	}
 }

@@ -119,3 +119,18 @@ def test_sorting_and_limit() -> None:
         "DEMO-1",
         "DEMO-2",
     ]
+
+
+def test_recommend_shows_conditional_measures_after_confirmed_matches() -> None:
+    results = recommend(
+        profile(msp_category=None),
+        [
+            make_measure(1, msp_categories=frozenset({"small"})),
+            make_measure(2),
+        ],
+        TODAY,
+    )
+    assert [(result.measure.external_code, result.status) for result in results] == [
+        ("DEMO-2", MatchStatus.ELIGIBLE),
+        ("DEMO-1", MatchStatus.NEEDS_MORE_INFO),
+    ]

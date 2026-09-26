@@ -119,9 +119,11 @@ class MaxApiClient:
         params: JsonDict = {"callback_id": callback_id}
         if disable_link_preview is not None:
             params["disable_link_preview"] = disable_link_preview
-        payload: JsonDict = {}
-        if message is not None:
-            payload["message"] = self._message_payload(message)
+        payload: JsonDict = (
+            {"message": self._message_payload(message)}
+            if message is not None
+            else {"notification": "Принято"}
+        )
         return await self._request("POST", "/answers", params=params, json=payload)
 
     async def create_subscription(

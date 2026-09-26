@@ -25,10 +25,16 @@ from navigator.domain.enums import (
     ConversationState,
     EmployeeBucket,
     FeedbackType,
+    MatchStatus,
     ProfileSource,
     SphereCategory,
 )
-from navigator.domain.errors import CompanyLookupUnavailable, CompanyNotFound, InvalidInn
+from navigator.domain.errors import (
+    CompanyLookupUnavailable,
+    CompanyNotFound,
+    InvalidInn,
+    ProfileIncomplete,
+)
 from navigator.infrastructure.db.repositories import SqlAlchemyRepositories
 from navigator.infrastructure.fns.adapter import CompanyLookupAdapter
 from navigator.infrastructure.max_api.client import MaxApiClient
@@ -380,31 +386,44 @@ class BotRuntime:
 
     async def _show_recommendations(self, user_id: int) -> None:
         async with self._repos.session() as repos:
-            recommendations = await RecommendationService(
-                repos.profiles, repos.measures, self._clock, repos.analytics
-            ).recommend_for_user(user_id)
-            if not recommendations:
-                await self._send(user_id, messages.ZERO_RESULTS)
+            try:
+                recommendations = await RecommendationService(
+                    repos.profiles, repos.measures, self._clock, repos.analytics
+                ).recommend_for_user(user_id)
+            except ProfileIncomplete:
+                await self._send(user_id, messages.NEEDS_INFO)
                 return
-            for item in recommendations:
-                measure = await repos.measures.get(item.measure_id)
-                if measure is not None:
-                    await self._send(
-                        user_id,
-                        render_measure(measure, item.reasons),
-                        keyboards.measure(str(measure.id)),
-                    )
-            if self._miniapp_web_app and len(recommendations) >= 2:
-                first, second = recommendations[:2]
-                await self._send(
-                    user_id,
-                    "Сравните две подходящие меры рядом — условия, суммы и документы.",
-                    keyboards.compare(
-                        self._miniapp_web_app, str(first.measure_id), str(second.measure_id)
-                    ),
-                )
-            if await InvestorService(repos.investors).should_prompt(user_id):
-                await self._send(user_id, messages.INVESTOR_PROMPT, keyboards.INVESTOR)
+            measures = [await repos.measures.get(item.measure_id) for item in recommendations]
+            prompt_investor = bool(recommendations) and await InvestorService(
+                repos.investors
+            ).should_prompt(user_id)
+        if not recommendations:
+            await self._send(user_id, messages.ZERO_RESULTS)
+            return
+        for item, measure in zip(recommendations, measures, strict=True):
+            if measure is None:
+                continue
+            warning = (
+                "⚠️ Нужно уточнить условия: данных профиля пока недостаточно.\n\n"
+                if item.status is MatchStatus.NEEDS_MORE_INFO
+                else ""
+            )
+            await self._send(
+                user_id,
+                warning + render_measure(measure, item.reasons),
+                keyboards.measure(str(measure.id)),
+            )
+        if self._miniapp_web_app and len(recommendations) >= 2:
+            first, second = recommendations[:2]
+            await self._send(
+                user_id,
+                "Сравните две меры рядом — условия, суммы и документы.",
+                keyboards.compare(
+                    self._miniapp_web_app, str(first.measure_id), str(second.measure_id)
+                ),
+            )
+        if prompt_investor:
+            await self._send(user_id, messages.INVESTOR_PROMPT, keyboards.INVESTOR)
 
     async def _show_measure_details(self, user_id: int, measure_id: UUID) -> None:
         async with self._repos.session() as repos:
@@ -451,12 +470,10 @@ class BotRuntime:
         if incoming.callback_id is None:
             return
         try:
-            await self._max.answer_callback(incoming.callback_id)
-            if incoming.callback_message_id is not None:
-                await self._max.edit_message(
-                    incoming.callback_message_id,
-                    NewMessageBody(text=f"✓ {summary}" if summary else None, attachments=[]),
-                )
+            await self._max.answer_callback(
+                incoming.callback_id,
+                message=NewMessageBody(text=f"✓ {summary}" if summary else None, attachments=[]),
+            )
         except (MaxApiNetworkError, MaxApiServerError) as exc:
             log.warning("could not clear answered MAX keyboard: %s", exc)
 
@@ -464,7 +481,9 @@ class BotRuntime:
         if incoming.callback_id is None:
             return
         try:
-            await self._max.answer_callback(incoming.callback_id)
+            await self._max.answer_callback(
+                incoming.callback_id, message=NewMessageBody(attachments=[])
+            )
         except (MaxApiNetworkError, MaxApiServerError) as exc:
             log.warning("could not acknowledge MAX callback: %s", exc)
 
@@ -526,10 +545,18 @@ def _callback_summary(callback: Callback) -> str:
             "education": "Образование", "tourism": "Туризм",
             "transport_logistics": "Транспорт и логистика", "other": "Прочее",
         },
-        "stage": {"new": "Только открылись", "lt1": "До 1 года", "1_3": "1–3 года", "gt3": "Больше 3 лет"},
-        "employees": {"1": "1 сотрудник", "2_15": "2–15 сотрудников", "16_100": "16–100 сотрудников", "100_plus": "Больше 100 сотрудников"},
+        "stage": {
+            "new": "Только открылись", "lt1": "До 1 года",
+            "1_3": "1–3 года", "gt3": "Больше 3 лет",
+        },
+        "employees": {
+            "1": "1 сотрудник", "2_15": "2–15 сотрудников",
+            "16_100": "16–100 сотрудников", "100_plus": "Больше 100 сотрудников",
+        },
     }
-    return labels.get(callback.action, {}).get(callback.values[0] if callback.values else "", "Действие выбрано")
+    return labels.get(callback.action, {}).get(
+        callback.values[0] if callback.values else "", "Действие выбрано"
+    )
 
 
 def _extract_incoming(update: dict[str, Any]) -> Incoming | None:

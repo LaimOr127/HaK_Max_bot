@@ -18,12 +18,16 @@ class MatchResult:
 def recommend(
     profile: BusinessProfile, measures: list[Measure], today: date, limit: int = 3
 ) -> list[MatchResult]:
-    eligible = [
-        result
-        for result in (match_measure(profile, measure, today) for measure in measures)
-        if result.status == MatchStatus.ELIGIBLE
-    ]
-    return sorted(eligible, key=_sort_key)[:limit]
+    results = [match_measure(profile, measure, today) for measure in measures]
+    eligible = sorted(
+        (result for result in results if result.status == MatchStatus.ELIGIBLE),
+        key=_sort_key,
+    )
+    uncertain = sorted(
+        (result for result in results if result.status == MatchStatus.NEEDS_MORE_INFO),
+        key=_sort_key,
+    )
+    return (eligible + uncertain)[:limit]
 
 
 def needs_more_info(

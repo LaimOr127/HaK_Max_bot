@@ -24,7 +24,8 @@ def repo_data_dir() -> Path:
 
 async def seed_demo(data_dir: Path | None = None) -> None:
     data_dir = data_dir or repo_data_dir()
-    measures, errors = load_csv(data_dir / "measures.example.csv")
+    production = get_settings().app_env == "production"
+    measures, errors = load_csv(data_dir / "measures.example.csv") if not production else ([], [])
     if errors:
         raise ValueError("\n".join(str(error) for error in errors))
 
@@ -33,14 +34,20 @@ async def seed_demo(data_dir: Path | None = None) -> None:
         async with session.begin():
             await _seed_spheres(session, data_dir / "sphere_categories.csv")
             await _seed_okved(session, data_dir / "okved_mapping.csv")
-            await import_rows(session, measures, is_demo=True)
             if measures:
+                await import_rows(session, measures, is_demo=True)
                 await session.execute(
                     update(models.Measure)
                     .where(models.Measure.is_demo.is_(True))
                     .where(
                         models.Measure.external_code.not_in([row.external_code for row in measures])
                     )
+                    .values(is_active=False)
+                )
+            else:
+                await session.execute(
+                    update(models.Measure)
+                    .where(models.Measure.is_demo.is_(True))
                     .values(is_active=False)
                 )
             current_measures, current_errors = load_csv(data_dir / "measures.current.csv")
