@@ -395,6 +395,62 @@
     .value { font-size: 12px; }
     .btn { font-size: 12px; }
   }
+  /* Mobile layout follows the supplied MAX prototype. */
+  body { background: #f1f5f9; color: #0f172a; }
+  .app { max-width: 430px; box-shadow: 0 20px 45px rgba(15,23,42,.12); }
+  .app.wizard-active .topbar { display: none; }
+  .app.wizard-active .content { padding: 0; }
+  .topbar { padding: 20px 22px 14px; }
+  .topbar .btn { width: auto; min-height: 36px; padding: 7px 12px; }
+  .content { padding: 20px; }
+  .wizard { min-height: 100dvh; padding: 28px 26px 34px; }
+  .wizard[hidden] { display: none; }
+  .wizard-start { display: flex; flex-direction: column; min-height: calc(100dvh - 62px); padding-top: 44px; }
+  .wizard-main { flex: 1; }
+  .brand-icon { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 18px; background: #2563eb; color: white; box-shadow: 0 12px 23px rgba(37,99,235,.22); margin-bottom: 34px; }
+  .wizard h2 { font-size: 27px; line-height: 1.23; letter-spacing: -.035em; margin: 0 0 15px; }
+  .wizard p { line-height: 1.57; }
+  .lead { color: #64748b; font-size: 15px; margin: 0 0 30px; }
+  .promise-list { display: grid; gap: 15px; margin: 0 0 34px; padding: 0; list-style: none; color: #475569; font-size: 14px; }
+  .promise-list li { display: flex; align-items: center; gap: 15px; }
+  .promise-list span { font-size: 20px; width: 23px; }
+  .wizard .btn { min-height: 54px; border-radius: 16px; font-size: 16px; }
+  .wizard .btn-primary { box-shadow: 0 10px 18px rgba(37,99,235,.16); }
+  .wizard .text-btn { display: block; width: 100%; padding: 18px 8px 6px; color: #2563eb; background: transparent; font-size: 15px; font-weight: 650; cursor: pointer; }
+  .step-head { display: flex; align-items: center; gap: 13px; margin-bottom: 32px; color: #94a3b8; text-transform: uppercase; font-size: 12px; font-weight: 650; letter-spacing: .04em; }
+  .back-btn { flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; color: #475569; cursor: pointer; font-size: 20px; }
+  .field-label { display: block; margin-bottom: 9px; color: #64748b; font-size: 12px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; }
+  .field-input { width: 100%; min-height: 56px; padding: 13px 16px; border: 2px solid #e2e8f0; border-radius: 16px; background: #f8fafc; color: #0f172a; font: inherit; font-size: 16px; outline: none; }
+  .field-input:focus { border-color: #2563eb; background: white; }
+  .field-input[aria-invalid="true"] { border-color: #ef4444; background: #fef2f2; }
+  .field { margin-bottom: 20px; }
+  .help { margin: 8px 0 30px; color: #94a3b8; font-size: 12px; }
+  .form-error { margin: 8px 0 18px; color: #dc2626; font-size: 13px; }
+  .form-error[hidden] { display: none; }
+  .wizard .btn:disabled { background: #e2e8f0; color: #94a3b8; box-shadow: none; }
+  .profile-card { border: 1px solid #f1f5f9; border-radius: 18px; overflow: hidden; box-shadow: 0 2px 5px rgba(15,23,42,.08); margin: 24px 0; }
+  .profile-row { padding: 17px 20px; border-top: 1px solid #f1f5f9; }
+  .profile-row:first-child { border-top: 0; }
+  .profile-row small { display: block; color: #94a3b8; text-transform: uppercase; font-size: 11px; font-weight: 700; letter-spacing: .06em; margin-bottom: 5px; }
+  .profile-row strong { display: block; color: #1e293b; font-size: 15px; line-height: 1.45; }
+  .profile-notice { display: flex; align-items: flex-start; gap: 12px; padding: 18px; margin-bottom: 28px; border-radius: 18px; background: #ecfdf5; color: #065f46; font-size: 13px; line-height: 1.5; }
+  .notice-mark { flex: 0 0 20px; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: #10b981; color: white; font-size: 13px; }
+  .result-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: #94a3b8; text-transform: uppercase; font-size: 12px; font-weight: 650; margin-bottom: 22px; }
+  .link-btn { padding: 0; background: transparent; color: #2563eb; font: inherit; font-weight: 650; cursor: pointer; }
+  .result-cards { display: grid; gap: 12px; margin: 22px 0; }
+  .result-card { display: block; width: 100%; text-align: left; background: white; border: 1px solid #f1f5f9; border-radius: 18px; padding: 20px; box-shadow: 0 2px 5px rgba(15,23,42,.05); cursor: pointer; }
+  .result-card strong { display: block; margin: 12px 0 7px; color: #0f172a; font-size: 16px; line-height: 1.4; }
+  .result-card .amount { color: #2563eb; font-size: 20px; font-weight: 750; }
+  .result-card .reason { display: block; margin-top: 8px; color: #64748b; font-size: 13px; line-height: 1.4; }
+  .chips { display: flex; gap: 7px; overflow-x: auto; margin: 20px -26px 0; padding: 0 26px 5px; }
+  .chip { flex: 0 0 auto; padding: 9px 14px; border-radius: 99px; color: #475569; background: #f1f5f9; font-size: 13px; font-weight: 650; cursor: pointer; }
+  .chip.active { background: #2563eb; color: white; }
+  .detail-section { margin: 25px 0; }
+  .detail-section h3 { color: #94a3b8; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
+  .detail-section p { margin: 7px 0; color: #475569; font-size: 14px; }
+  .wizard .docs { margin: 8px 0 0; }
+  .wizard .docs li { color: #334155; }
+  @media (min-width: 520px) { .app { margin: 24px auto; min-height: calc(100dvh - 48px); border-radius: 24px; } .wizard { min-height: calc(100dvh - 48px); } }
 </style>
 </head>
 <body>
@@ -413,6 +469,7 @@
       <p>Открываем ваши данные и меры поддержки.</p>
     </div>
 
+    <div class="wizard" id="wizard" hidden></div>
     <div class="home" id="home" hidden></div>
     <div class="compare" id="compare" hidden></div>
     <article class="details" id="details" hidden></article>
@@ -426,10 +483,17 @@
 (() => {
   const api = {
     home: "/api/miniapp/home",
+    lookup: "/api/miniapp/lookup",
+    manual: "/api/miniapp/manual",
+    profile: "/api/miniapp/profile",
+    confirm: "/api/miniapp/confirm",
+    detail: id => `/api/miniapp/measures/${encodeURIComponent(id)}`,
     compare: "/api/miniapp/compare",
     checklist: id => `/api/miniapp/checklist/${encodeURIComponent(id)}`
   };
   const stateEl = document.getElementById("state");
+  const appEl = document.querySelector(".app");
+  const wizardEl = document.getElementById("wizard");
   const homeEl = document.getElementById("home");
   const compareEl = document.getElementById("compare");
   const detailsEl = document.getElementById("details");
@@ -441,6 +505,12 @@
   let activeCompareIds = [];
   let busyId = null;
   let confirmId = null;
+  let profile = null;
+  let homeData = null;
+  let activeFilter = "all";
+  let activeDetail = null;
+  let manualCreatesNew = false;
+  let detailRemoveConfirm = false;
 
   document.getElementById("close-btn").addEventListener("click", closeApp);
 
@@ -476,8 +546,23 @@
     return { "X-Max-Init-Data": initData };
   }
 
+  async function post(url, body) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { ...headers(), "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(typeof data.detail === "string" ? data.detail : `Ошибка ${res.status}`);
+    }
+    return res.json();
+  }
+
   function showState(title, text) {
+    appEl.classList.remove("wizard-active");
     stateEl.hidden = false;
+    wizardEl.hidden = true;
     homeEl.hidden = true;
     compareEl.hidden = true;
     detailsEl.hidden = true;
@@ -486,7 +571,9 @@
   }
 
   function showLoading() {
+    appEl.classList.remove("wizard-active");
     stateEl.hidden = false;
+    wizardEl.hidden = true;
     homeEl.hidden = true;
     compareEl.hidden = true;
     detailsEl.hidden = true;
@@ -536,72 +623,196 @@
     try {
       const res = await fetch(api.home, { headers: headers() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      renderHome(await res.json());
+      homeData = await res.json();
+      profile = homeData.profile;
+      if (homeData.profile_complete) renderResults();
+      else if (profile) renderProfile();
+      else renderStart();
     } catch (err) {
       showState("Не удалось открыть меню", "Проверьте соединение и попробуйте ещё раз из чата.");
     }
   }
 
-  function renderHome(data) {
-    const recommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
-    const checklist = Array.isArray(data.checklist) ? data.checklist : [];
-    const profileText = data.profile_text || "Профиль пока не заполнен.";
+  const SPHERES = [
+    ["foodservice", "Общепит"], ["retail", "Розничная торговля"],
+    ["household_services", "Бытовые услуги"], ["professional", "Деловые услуги"],
+    ["it_digital", "IT и цифровые услуги"], ["manufacturing", "Производство"],
+    ["construction_repair", "Строительство и ремонт"], ["beauty_health", "Красота"],
+    ["health", "Здоровье и медицина"], ["education", "Образование"],
+    ["transport_logistics", "Транспорт и логистика"], ["tourism", "Туризм"], ["other", "Другое"]
+  ];
+  const FORMS = [["ip", "ИП"], ["ooo", "ООО"], ["self_employed", "Самозанятый"]];
+  const STAGES = [["new", "Только открываюсь"], ["lt1", "Меньше года"], ["1_3", "От 1 до 3 лет"], ["gt3", "Больше 3 лет"]];
+  const EMPLOYEES = [["1", "Только я"], ["2_15", "От 2 до 15"], ["16_100", "От 16 до 100"], ["100_plus", "Больше 100"]];
+  const MSP = { micro: "Микропредприятие", small: "Малое предприятие", medium: "Среднее предприятие" };
+  const REGIONS = { "77": "Москва", "50": "Московская область", "78": "Санкт-Петербург", "16": "Республика Татарстан" };
+
+  function nameOf(options, value) {
+    return (options.find(item => item[0] === value) || [null, "Не указано"])[1];
+  }
+
+  function showWizard(html) {
+    appEl.classList.add("wizard-active");
     stateEl.hidden = true;
+    homeEl.hidden = true;
     compareEl.hidden = true;
     detailsEl.hidden = true;
-    homeEl.hidden = false;
-    subtitleEl.textContent = "Меню подбора мер";
-    document.querySelector("h1").textContent = "Навигатор льгот";
-    homeEl.innerHTML = `
-      <nav class="home-nav" aria-label="Разделы">
-        <a class="nav-card" href="#profile"><span class="nav-title">Профиль</span><span class="nav-meta">${escapeHtml(data.profile_complete ? "готов" : "нужно уточнить")}</span></a>
-        <a class="nav-card" href="#recommendations"><span class="nav-title">Подбор</span><span class="nav-meta">${escapeHtml(countText(recommendations.length, "мера", "меры", "мер"))}</span></a>
-        <a class="nav-card" href="#checklist"><span class="nav-title">Чек-лист</span><span class="nav-meta">${escapeHtml(countText(checklist.length, "пункт", "пункта", "пунктов"))}</span></a>
-      </nav>
-
-      <section class="home-card" id="profile">
-        <div class="home-card-head"><h2>Профиль компании</h2></div>
-        <div class="home-body">
-          <p class="profile-text">${escapeHtml(profileText)}</p>
-          ${data.profile_complete ? "" : `<p class="home-note">Вернитесь в чат и отправьте ИНН сообщением. Если профиль уже частично заполнен — уточните данные через /start.</p>`}
-        </div>
-      </section>
-
-      <section class="home-card" id="recommendations">
-        <div class="home-card-head"><h2>Персональные меры</h2></div>
-        <div class="home-body">
-          ${recommendations.length ? `<div class="recommendations">${recommendations.map(renderHomeRecommendation).join("")}</div>` : `<p class="profile-text">Пока нет подходящих мер. Уточните профиль в чате, чтобы расширить подбор.</p>`}
-          ${recommendations.length >= 2 ? '<button class="btn btn-primary" type="button" data-home-compare>Сравнить первые две меры</button>' : ""}
-        </div>
-      </section>
-
-      <section class="home-card" id="checklist">
-        <div class="home-card-head"><h2>Мой чек-лист</h2></div>
-        <div class="home-body">
-          ${checklist.length ? `<ul class="checklist-list">${checklist.map(item => `<li>${escapeHtml(item.name || "Мера поддержки")}</li>`).join("")}</ul>` : `<p class="profile-text">В чек-листе пока пусто. Добавляйте меры из подбора, чтобы не потерять их.</p>`}
-        </div>
-      </section>
-    `;
-    const compareButton = homeEl.querySelector("[data-home-compare]");
-    if (compareButton) compareButton.addEventListener("click", () => {
-      loadCompare(null, recommendations.slice(0, 2).map(item => item.id));
-    });
+    wizardEl.hidden = false;
+    wizardEl.innerHTML = html;
+    window.scrollTo(0, 0);
   }
 
-  function renderHomeRecommendation(m) {
-    const reasons = Array.isArray(m.reasons) ? m.reasons.filter(Boolean) : [];
-    return `
-      <article class="recommendation">
-        <span class="badge">${escapeHtml(levelName(m.support_level))}</span>
-        <div class="recommendation-title">${escapeHtml(m.name || "Мера поддержки")}</div>
-        <div class="recommendation-amount">${escapeHtml(m.amount_display || "Сумма уточняется")}</div>
-        ${m.status === "NEEDS_MORE_INFO" ? '<p class="home-note">Нужно уточнить условия программы перед подачей.</p>' : ""}
-        ${reasons.length ? `<ul class="reason-list">${reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : ""}
-      </article>
-    `;
+  function stepHeader(number, back) {
+    return `<div class="step-head"><button class="back-btn" type="button" data-action="${back}" aria-label="Назад">‹</button><span>Шаг ${number} из 4</span></div>`;
   }
+
+  function selectField(label, key, options, value) {
+    return `<div class="field"><label class="field-label" for="${key}">${label}</label><select class="field-input" id="${key}" name="${key}" required><option value="">Выберите вариант</option>${options.map(([id, text]) => `<option value="${escapeAttr(id)}" ${id === value ? "selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></div>`;
+  }
+
+  function renderStart() {
+    showWizard(`<div class="wizard-start"><div class="wizard-main"><div class="brand-icon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 28 28" fill="none"><path d="M7 14h14m-7-7 7 7-7 7" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="3" y="3" width="22" height="22" rx="6" stroke="white" stroke-width="1.5" opacity=".4"/></svg></div><h2>Найдём меры поддержки для вашего бизнеса</h2><p class="lead">Бесплатная проверка федеральных и региональных программ — гранты, льготы, кредиты и субсидии для вашего профиля.</p><ul class="promise-list"><li><span>⚡</span>Результат после заполнения профиля</li><li><span>🔒</span>Данные из открытых реестров ФНС</li><li><span>✅</span>Доступные программы поддержки</li></ul></div><button class="btn btn-primary" type="button" data-action="inn">Начать подбор</button></div>`);
+  }
+
+  function renderInn(error = "") {
+    showWizard(`${stepHeader(1, "start")}<h2>Введите ИНН вашей компании</h2><p class="lead">Автоматически подтянем название, регион и сферу деятельности из открытых реестров ФНС.</p><form id="inn-form"><div class="field"><label class="field-label" for="inn">ИНН</label><input class="field-input" id="inn" name="inn" type="text" inputmode="numeric" pattern="[0-9]{10}|[0-9]{12}" maxlength="12" autocomplete="off" placeholder="Например, 7702070139" aria-invalid="${Boolean(error)}" required><p class="form-error" id="inn-error" ${error ? "" : "hidden"}>${escapeHtml(error)}</p></div><p class="help">ИНН состоит из 10 цифр для организаций и 12 — для ИП.</p><button class="btn btn-primary" id="inn-submit" type="submit" disabled>Найти автоматически</button></form><button class="text-btn" type="button" data-action="manual">Заполнить вручную</button>`);
+  }
+
+  function renderManual(error = "") {
+    const p = manualCreatesNew ? null : profile;
+    showWizard(`${stepHeader(1, "inn")}<h2>Заполните профиль вручную</h2><p class="lead">Укажите данные бизнеса, чтобы подобрать программы без запроса к ФНС.</p><form id="manual-form"><div class="field"><label class="field-label" for="region_code">Регион</label><input class="field-input" id="region_code" name="region_code" value="${escapeAttr(p?.region_code || "")}" placeholder="Например, Москва или 77" maxlength="50" required></div>${selectField("Организационная форма", "business_form", FORMS, p?.business_form)}${selectField("Сфера деятельности", "sphere", SPHERES, p?.sphere)}${selectField("Этап бизнеса", "business_stage", STAGES, p?.business_stage)}${selectField("Сотрудники", "employee_bucket", EMPLOYEES, p?.employee_bucket)}<p class="form-error" ${error ? "" : "hidden"}>${escapeHtml(error)}</p><button class="btn btn-primary" type="submit">Сохранить профиль</button></form>`);
+  }
+
+  function renderProfile() {
+    const p = profile || {};
+    const rows = [
+      ["Название компании", p.company_name || "Заполнено вручную"],
+      ["Регион", REGIONS[p.region_code] || p.region_code || "Не указан"],
+      ["Сфера деятельности", nameOf(SPHERES, p.sphere)],
+      ["Организационная форма", nameOf(FORMS, p.business_form)],
+      ["Статус в реестре МСП", p.msp_category ? `${MSP[p.msp_category]} ✓` : "Нет данных"]
+    ];
+    const notice = p.msp_category
+      ? "Компания включена в реестр МСП. Это открывает доступ к большинству программ поддержки."
+      : "Статус МСП не подтверждён данными реестра. Условия каждой программы нужно проверить перед подачей.";
+    showWizard(`${stepHeader(2, p.inn ? "inn" : "manual")}<h2>Проверьте данные</h2><p class="lead">${p.source === "fns" ? "Мы нашли это в открытых источниках — поправьте, если что-то не так." : "Проверьте введённые данные перед подбором."}</p><div class="profile-card">${rows.map(([label, value]) => `<div class="profile-row"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></div>`).join("")}</div><div class="profile-notice"><span class="notice-mark">✓</span><span>${escapeHtml(notice)}</span></div><button class="btn btn-primary" type="button" data-action="confirm">Всё верно, найти меры поддержки</button><button class="text-btn" type="button" data-action="manual">Изменить данные</button>`);
+  }
+
+  function needsSupplement() {
+    return !profile || !profile.sphere || !profile.business_stage || !profile.employee_bucket;
+  }
+
+  function renderSupplement(error = "") {
+    showWizard(`${stepHeader(3, "profile")}<h2>Уточните ваш бизнес</h2><p class="lead">Эти ответы помогут подобрать меры точнее. Из реестра ФНС их узнать нельзя.</p><form id="supplement-form">${selectField("Сфера деятельности", "sphere", SPHERES, profile?.sphere)}${selectField("Этап бизнеса", "business_stage", STAGES, profile?.business_stage)}${selectField("Сотрудники", "employee_bucket", EMPLOYEES, profile?.employee_bucket)}<p class="form-error" ${error ? "" : "hidden"}>${escapeHtml(error)}</p><button class="btn btn-primary" type="submit">Показать меры поддержки</button></form>`);
+  }
+
+  function renderResults() {
+    const all = Array.isArray(homeData?.recommendations) ? homeData.recommendations : [];
+    const visible = activeFilter === "all" ? all : all.filter(m => m.support_level === activeFilter);
+    const p = profile || {};
+    showWizard(`<div class="result-head"><span>Результаты · Шаг 4 из 4</span><button class="link-btn" type="button" data-action="checklist">Чек-лист</button></div><h2>Мы нашли ${countText(all.length, "меру", "меры", "мер")} поддержки</h2><p class="lead">Для ${escapeHtml(p.company_name || nameOf(FORMS, p.business_form))}, ${escapeHtml(REGIONS[p.region_code] || p.region_code || "вашего региона")}</p><div class="chips">${[["all", "Все"], ["federal", "Федеральные"], ["regional", "Региональные"]].map(([id, label]) => `<button class="chip ${activeFilter === id ? "active" : ""}" type="button" data-filter="${id}">${label}${id === "all" ? "" : ` ${all.filter(m => m.support_level === id).length}`}</button>`).join("")}</div>${visible.length ? `<div class="result-cards">${visible.map(m => `<button class="result-card" type="button" data-detail="${escapeAttr(m.id)}"><span class="badge">${escapeHtml(levelName(m.support_level))}</span><strong>${escapeHtml(m.name)}</strong><span class="amount">${escapeHtml(m.amount_display || "Сумма уточняется")}</span>${m.status === "NEEDS_MORE_INFO" ? `<span class="reason">Нужно уточнить условия программы</span>` : ""}</button>`).join("")}</div>` : `<p class="home-note">${all.length ? "По этому фильтру мер нет." : "Пока нет подходящих мер. Данные программ обновляются; проверьте условия позже или измените профиль."}</p>`}${all.length >= 2 ? `<button class="btn btn-primary" type="button" data-action="compare">Сравнить первые две меры</button>` : ""}<button class="text-btn" type="button" data-action="profile">Проверить профиль</button>`);
+  }
+
+  async function openDetail(id) {
+    try {
+      const res = await fetch(api.detail(id), { headers: headers() });
+      if (!res.ok) throw new Error(`Ошибка ${res.status}`);
+      activeDetail = await res.json();
+      detailRemoveConfirm = false;
+      renderSingleDetail();
+    } catch (err) { showToast("Не удалось загрузить меру. Попробуйте ещё раз."); }
+  }
+
+  function renderSingleDetail() {
+    const m = activeDetail;
+    if (!m) return renderResults();
+    const sourceUrl = /^https?:\/\//i.test(m.source_url || "") ? m.source_url : "";
+    showWizard(`<div class="step-head"><button class="back-btn" type="button" data-action="results" aria-label="Назад">‹</button><span>${escapeHtml(levelName(m.support_level))}</span></div><h2>${escapeHtml(m.name)}</h2><p class="amount" style="color:#2563eb;font-size:23px;font-weight:750">${escapeHtml(m.amount_display)}</p><div class="detail-section"><h3>Что это</h3><p>${escapeHtml(m.what_is_it || "Уточняется в первоисточнике.")}</p></div><div class="detail-section"><h3>Кто может получить</h3><p>${escapeHtml(m.who_can_receive || "Уточняется в первоисточнике.")}</p></div><div class="detail-section"><h3>Документы</h3><ul class="docs">${(m.documents || []).map(doc => `<li>${escapeHtml(doc)}</li>`).join("") || "<li>Уточняются в первоисточнике</li>"}</ul></div><div class="detail-section"><h3>Куда подавать</h3><p>${escapeHtml(m.where_to_apply || "Уточняется в первоисточнике.")}</p></div>${sourceUrl ? `<div class="detail-section"><h3>Источник</h3><a href="${escapeAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(m.source_name || "Открыть первоисточник")}</a></div>` : ""}${detailRemoveConfirm ? `<div class="confirm"><div class="confirm-title">Убрать меру из чек-листа?</div><div class="confirm-actions"><button class="btn btn-danger" type="button" data-action="detail-remove-yes">Да, убрать</button><button class="btn" type="button" data-action="detail-remove-no">Отмена</button></div></div>` : ""}<button class="btn ${m.checklisted ? "btn-ok" : "btn-primary"}" type="button" data-action="detail-toggle">${m.checklisted ? "✓ В чек-листе" : "Добавить в чек-лист"}</button><button class="text-btn" type="button" data-action="results">Закрыть</button>`);
+  }
+
+  function renderChecklist() {
+    const items = Array.isArray(homeData?.checklist) ? homeData.checklist : [];
+    showWizard(`<div class="step-head"><button class="back-btn" type="button" data-action="results" aria-label="Назад">‹</button><span>Чек-лист</span></div><h2>Сохранённые меры</h2><p class="lead">Программы, к которым вы хотите вернуться.</p>${items.length ? `<div class="result-cards">${items.map(item => `<div class="result-card"><strong>${escapeHtml(item.name)}</strong><button class="link-btn" type="button" data-detail="${escapeAttr(item.id)}">Подробнее</button></div>`).join("")}</div>` : `<p class="home-note">Здесь пока пусто. Добавьте меру из результатов.</p>`}<button class="text-btn" type="button" data-action="results">К результатам</button>`);
+  }
+
+  wizardEl.addEventListener("input", event => {
+    if (event.target.id !== "inn") return;
+    event.target.value = event.target.value.replace(/\D/g, "").slice(0, 12);
+    const validLength = [10, 12].includes(event.target.value.length);
+    document.getElementById("inn-submit").disabled = !validLength;
+    event.target.setAttribute("aria-invalid", "false");
+    document.getElementById("inn-error").hidden = true;
+  });
+
+  wizardEl.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.target;
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      if (form.id === "inn-form") {
+        button.textContent = "Ищем в реестре ФНС…";
+        profile = (await post(api.lookup, { inn: form.elements.namedItem("inn").value })).profile;
+        renderProfile();
+      } else if (form.id === "manual-form") {
+        profile = (await post(manualCreatesNew || !profile ? api.manual : api.profile, Object.fromEntries(new FormData(form)))).profile;
+        renderProfile();
+      } else if (form.id === "supplement-form") {
+        profile = (await post(api.profile, Object.fromEntries(new FormData(form)))).profile;
+        await post(api.confirm);
+        await loadHome();
+      }
+    } catch (err) {
+      const error = form.querySelector(".form-error");
+      if (error) { error.textContent = err.message; error.hidden = false; }
+      const input = form.querySelector("input");
+      if (input) input.setAttribute("aria-invalid", "true");
+      button.disabled = false;
+      button.textContent = form.id === "inn-form" ? "Найти автоматически" : form.id === "manual-form" ? "Сохранить профиль" : "Показать меры поддержки";
+    }
+  });
+
+  wizardEl.addEventListener("click", async event => {
+    const filter = event.target.closest("[data-filter]");
+    if (filter) { activeFilter = filter.dataset.filter; renderResults(); return; }
+    const detail = event.target.closest("[data-detail]");
+    if (detail) { await openDetail(detail.dataset.detail); return; }
+    const action = event.target.closest("[data-action]")?.dataset.action;
+    if (action === "start") renderStart();
+    if (action === "inn") renderInn();
+    if (action === "manual") { manualCreatesNew = Boolean(wizardEl.querySelector("#inn-form")); renderManual(); }
+    if (action === "profile") renderProfile();
+    if (action === "results") renderResults();
+    if (action === "checklist") renderChecklist();
+    if (action === "compare") await loadCompare(null, homeData.recommendations.slice(0, 2).map(item => item.id));
+    if (action === "confirm") {
+      if (needsSupplement()) { renderSupplement(); return; }
+      try { await post(api.confirm); await loadHome(); }
+      catch (err) { showToast(err.message); }
+    }
+    if (action === "detail-remove-no") { detailRemoveConfirm = false; renderSingleDetail(); return; }
+    if (action === "detail-toggle" && activeDetail?.checklisted) {
+      detailRemoveConfirm = true;
+      renderSingleDetail();
+      return;
+    }
+    if ((action === "detail-toggle" || action === "detail-remove-yes") && activeDetail) {
+      const wasChecked = activeDetail.checklisted;
+      try {
+        const res = await fetch(api.checklist(activeDetail.id), { method: wasChecked ? "DELETE" : "POST", headers: headers() });
+        if (!res.ok) throw new Error(`Ошибка ${res.status}`);
+        activeDetail.checklisted = !wasChecked;
+        detailRemoveConfirm = false;
+        renderSingleDetail();
+        showToast(wasChecked ? "Убрано из чек-листа" : "Добавлено в чек-лист");
+        const homeRes = await fetch(api.home, { headers: headers() });
+        if (homeRes.ok) homeData = await homeRes.json();
+      } catch (err) { showToast("Не удалось обновить чек-лист."); }
+    }
+  });
 
   function renderCompare() {
+    appEl.classList.remove("wizard-active");
     stateEl.hidden = true;
     homeEl.hidden = true;
     compareEl.hidden = false;

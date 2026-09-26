@@ -98,6 +98,7 @@ async def test_lookup_inn_saves_fns_profile_and_waits_for_confirmation() -> None
 
     assert lookup.requested == ["7707083893"]
     assert profile.source is ProfileSource.FNS
+    assert profile.sphere is SphereCategory.IT_DIGITAL
     assert profile.employee_bucket is EmployeeBucket.TWO_TO_FIFTEEN
     assert profile.fns_checked_at == checked_at
     assert profiles.values[42] == profile

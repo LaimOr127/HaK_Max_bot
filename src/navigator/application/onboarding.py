@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import csv
 from datetime import UTC, datetime
+from functools import lru_cache
+from pathlib import Path
 
 from navigator.domain.entities import BusinessProfile
 from navigator.domain.enums import (
@@ -104,7 +107,11 @@ class OnboardingService:
             region_code=result.region_code,
             primary_okved=result.primary_okved,
             business_form=result.business_form or _form_from_inn(inn),
-            sphere=same_company.sphere if same_company else None,
+            sphere=(
+                same_company.sphere
+                if same_company and same_company.sphere
+                else _sphere_from_okved(result.primary_okved)
+            ),
             business_stage=same_company.business_stage if same_company else None,
             employee_bucket=(
                 _bucket_from_count(result.employee_count)
@@ -149,6 +156,26 @@ class OnboardingService:
 
 def _form_from_inn(inn: str) -> BusinessForm:
     return BusinessForm.OOO if len(inn) == 10 else BusinessForm.IP
+
+
+@lru_cache(maxsize=1)
+def _okved_spheres() -> dict[str, SphereCategory]:
+    path = Path.cwd() / "data" / "okved_mapping.csv"
+    if not path.is_file():
+        path = Path(__file__).resolve().parents[3] / "data" / "okved_mapping.csv"
+    try:
+        with path.open(encoding="utf-8-sig", newline="") as source:
+            return {
+                row["okved_class"]: SphereCategory(row["sphere"]) for row in csv.DictReader(source)
+            }
+    except FileNotFoundError:
+        return {}
+
+
+def _sphere_from_okved(code: str | None) -> SphereCategory | None:
+    if not code or len(code) < 2 or not code[:2].isdigit():
+        return None
+    return _okved_spheres().get(code[:2])
 
 
 def _bucket_from_count(count: int | None) -> EmployeeBucket | None:

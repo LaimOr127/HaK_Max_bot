@@ -15,7 +15,13 @@ from pydantic import SecretStr
 from navigator import bootstrap
 from navigator.bootstrap import app
 from navigator.domain.entities import Measure, MeasureDocument
-from navigator.domain.enums import SupportLevel
+from navigator.domain.enums import (
+    BusinessForm,
+    CompanyLookupStatus,
+    ConversationState,
+    SupportLevel,
+)
+from navigator.ports.company_lookup import CompanyLookupResult
 from navigator.presentation.http import miniapp
 from navigator.presentation.http.miniapp import verify_init_data, verify_user_data
 from navigator.presentation.maxbot.keyboards import compare, home
@@ -97,16 +103,136 @@ async def test_miniapp_page_is_served_without_mock_data() -> None:
     assert 'queryValue("WebAppData")' in response.text
     assert 'queryValue("init_data")' in response.text
     assert 'new URLSearchParams(initData).get("start_param")' in response.text
-    assert 'data-home-compare' in response.text
+    assert 'data-action="compare"' in response.text
+    assert 'id="inn-form"' in response.text
+    assert 'id="manual-form"' in response.text
+    assert 'id="supplement-form"' in response.text
     assert "Субсидия на оборудование" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_web_onboarding_lookup_complete_and_recommend(monkeypatch) -> None:
+    saved = {}
+    states = {}
+
+    class Profiles:
+        async def get_by_user(self, user_id):
+            return saved.get(user_id)
+
+        async def save(self, profile):
+            saved[profile.max_user_id] = profile
+
+    class States:
+        async def set_state(self, user_id, state, context=None):
+            states[user_id] = (state, context or {})
+
+        async def get_state(self, user_id):
+            return states.get(user_id)
+
+    class Measures:
+        async def list_active_candidates(self, today):
+            return []
+
+    class Checklists:
+        async def list_by_user(self, user_id):
+            return []
+
+    class RepoSession:
+        async def __aenter__(self):
+            return SimpleNamespace(
+                profiles=Profiles(),
+                states=States(),
+                measures=Measures(),
+                checklists=Checklists(),
+                analytics=None,
+            )
+
+        async def __aexit__(self, *args):
+            return None
+
+    class Repos:
+        def __init__(self, sessionmaker):
+            pass
+
+        def session(self):
+            return RepoSession()
+
+    class Lookup:
+        async def find_by_inn(self, inn):
+            assert inn == "7707083893"
+            return CompanyLookupResult(
+                status=CompanyLookupStatus.FOUND,
+                inn=inn,
+                company_name="Компания",
+                region_code="77",
+                business_form=BusinessForm.OOO,
+            )
+
+    monkeypatch.setattr(miniapp, "SqlAlchemyRepositories", Repos)
+    monkeypatch.setattr(
+        bootstrap,
+        "settings",
+        SimpleNamespace(miniapp_enabled=True, max_bot_token=SecretStr("token")),
+    )
+    app.state.db_sessionmaker = None
+    app.state.company_lookup = Lookup()
+    headers = {"X-Max-Init-Data": signed_data(start="home", auth_date=int(time.time()))}
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/miniapp/lookup", json={"inn": "7707083893"}, headers=headers
+        )
+        assert response.status_code == 200
+        assert response.json()["profile"]["company_name"] == "Компания"
+        response = await client.post("/api/miniapp/confirm", headers=headers)
+        assert response.status_code == 409
+        response = await client.post(
+            "/api/miniapp/profile",
+            json={"sphere": "it_digital", "business_stage": "gt3", "employee_bucket": "16_100"},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["profile"]["inn"] == "7707083893"
+        pending = await client.get("/api/miniapp/home", headers=headers)
+        assert pending.json()["profile_complete"] is False
+        assert pending.json()["recommendations"] == []
+        response = await client.post("/api/miniapp/confirm", headers=headers)
+        assert response.status_code == 200
+        response = await client.get("/api/miniapp/home", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["profile_complete"] is True
+        response = await client.post(
+            "/api/miniapp/manual",
+            json={
+                "region_code": "Москва",
+                "business_form": "ip",
+                "sphere": "retail",
+                "business_stage": "lt1",
+                "employee_bucket": "1",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["profile"]["inn"] is None
+        assert response.json()["profile"]["region_code"] == "77"
+        response = await client.post("/api/miniapp/confirm", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["profile"]["sphere"] == "retail"
 
 
 @pytest.mark.asyncio
 async def test_home_api_uses_signed_user_profile(monkeypatch) -> None:
     profile = SimpleNamespace(
-        region_code="77", business_form="ooo", sphere="it_digital",
-        business_stage="gt3", employee_bucket="16_100", inn="9715384111",
-        company_name="Компания", primary_okved="62.01", msp_category=None,
+        region_code="77",
+        business_form="ooo",
+        sphere="it_digital",
+        business_stage="gt3",
+        employee_bucket="16_100",
+        inn="9715384111",
+        company_name="Компания",
+        primary_okved="62.01",
+        msp_category=None,
         source="fns",
     )
 
@@ -119,6 +245,10 @@ async def test_home_api_uses_signed_user_profile(monkeypatch) -> None:
         async def list_active_candidates(self, today):
             return []
 
+    class States:
+        async def get_state(self, user_id):
+            return (ConversationState.READY, {})
+
     class Checklists:
         async def list_by_user(self, user_id):
             assert user_id == 42
@@ -127,7 +257,7 @@ async def test_home_api_uses_signed_user_profile(monkeypatch) -> None:
     class RepoSession:
         async def __aenter__(self):
             return SimpleNamespace(
-                profiles=Profiles(), measures=Measures(), checklists=Checklists()
+                profiles=Profiles(), states=States(), measures=Measures(), checklists=Checklists()
             )
 
         async def __aexit__(self, *args):
@@ -157,9 +287,13 @@ async def test_home_api_uses_signed_user_profile(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_home_launch_can_compare_only_recommended_measures(monkeypatch) -> None:
+    class States:
+        async def get_state(self, user_id):
+            return (ConversationState.READY, {})
+
     class RepoSession:
         async def __aenter__(self):
-            return SimpleNamespace(profiles=None, measures=None)
+            return SimpleNamespace(profiles=None, states=States(), measures=None)
 
         async def __aexit__(self, *args):
             return None
@@ -189,10 +323,14 @@ async def test_home_launch_can_compare_only_recommended_measures(monkeypatch) ->
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db_sessionmaker=None)))
     now = int(time.time())
     assert await miniapp._authorized(request, signed_data(start="home", auth_date=now)) == (
-        42, (FIRST, SECOND), False
+        42,
+        (FIRST, SECOND),
+        False,
     )
     assert await miniapp._authorized(request, signed_data(auth_date=now)) == (
-        42, (FIRST, SECOND), True
+        42,
+        (FIRST, SECOND),
+        True,
     )
 
 
@@ -251,6 +389,7 @@ async def test_compare_api_returns_only_signed_measures_and_shared_checklist(mon
     with pytest.raises(HTTPException) as exc:
         await miniapp.compare_data(request, f"{SECOND},{FIRST}")
     assert exc.value.status_code == 403
+
     async def authorized_home(request, raw):
         return 42, (FIRST, SECOND), False
 

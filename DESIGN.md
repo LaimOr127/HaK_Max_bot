@@ -10,4 +10,6 @@ Initial bot states:
 - Measure card actions: `Подробнее`, `Добавить в чек-лист`, and navigation through recommendations.
 - Checklist actions: one button per document state toggle, plus back to recommendations.
 
-Do not add mini-app UX here until the bot acceptance path is green.
+The bot acceptance path has regression coverage. The mini-app now uses the
+provided MAX mobile prototype for onboarding, profile confirmation and results;
+its cards read the same profile and measures as the bot.

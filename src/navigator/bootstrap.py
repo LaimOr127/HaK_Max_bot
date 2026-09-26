@@ -48,6 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.redis = redis
     app.state.bot_runtime = None
     app.state.max_client = None
+    app.state.company_lookup = company_lookup
 
     if settings.max_bot_token is not None:
         max_client = MaxApiClient(

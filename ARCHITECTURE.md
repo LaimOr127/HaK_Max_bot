@@ -145,6 +145,17 @@ sequenceDiagram
     API->>API: verify_user_data
     API->>DB: profile, recommendations, checklist
     API-->>WebView: home data
+    alt profile is missing
+        WebView->>API: POST /api/miniapp/lookup or /manual
+        API->>DB: save draft profile
+        WebView->>API: POST /api/miniapp/profile (if fields missing)
+        WebView->>API: POST /api/miniapp/confirm
+        API->>DB: mark profile ready
+        WebView->>API: GET /api/miniapp/home
+    end
+    WebView->>API: GET /api/miniapp/measures/{id}
+    API->>API: verify current recommendation
+    API-->>WebView: details + documents + source
     WebView->>API: GET /api/miniapp/compare?ids=a,b
     API->>API: verify ids are allowed for user
     API->>DB: measures + checklist state
