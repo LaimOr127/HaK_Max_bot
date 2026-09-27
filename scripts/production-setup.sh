@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-DOMAIN="${MAX_WEBHOOK_PUBLIC_HOST:-svadba-2026.ru}"
-EXPECTED_IP="${EXPECTED_PUBLIC_IP:-193.5.251.40}"
+DOMAIN="${MAX_WEBHOOK_PUBLIC_HOST:?set the bot's own MAX_WEBHOOK_PUBLIC_HOST}"
+EXPECTED_IP="${EXPECTED_PUBLIC_IP:?set the bot server's EXPECTED_PUBLIC_IP}"
 COMPOSE=(docker compose -f compose.yml -f compose.prod.yml)
 
 die() {

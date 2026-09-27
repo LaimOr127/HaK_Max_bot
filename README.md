@@ -206,12 +206,8 @@ Script:
 - проверяет `https://<domain>/health/ready`;
 - запускает MAX smoke-check и регистрирует webhook.
 
-По умолчанию script использует:
-
-- `MAX_WEBHOOK_PUBLIC_HOST=svadba-2026.ru`
-- `EXPECTED_PUBLIC_IP=193.5.251.40`
-
-Для другого домена задайте переменные перед запуском:
+Укажите домен и IP сервера самого бота перед запуском. Script не содержит
+доменов других проектов по умолчанию:
 
 ```bash
 MAX_WEBHOOK_PUBLIC_HOST=example.ru EXPECTED_PUBLIC_IP=203.0.113.10 ./scripts/production-setup.sh
