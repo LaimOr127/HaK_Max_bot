@@ -4,12 +4,20 @@ from navigator.domain.entities import BusinessProfile
 from navigator.domain.enums import (
     BusinessForm,
     BusinessStage,
+    CompanyLookupStatus,
     ConversationState,
     EmployeeBucket,
+    ProfileSource,
     SphereCategory,
 )
+from navigator.ports.company_lookup import CompanyLookupResult
 from navigator.presentation.maxbot.callbacks import parse_callback
-from navigator.presentation.maxbot.keyboards import SPHERE, WELCOME_BACK
+from navigator.presentation.maxbot.keyboards import (
+    INN_UNAVAILABLE,
+    SPHERE,
+    WELCOME_BACK,
+    ZERO_RESULTS,
+)
 from navigator.presentation.maxbot.runtime import (
     BotRuntime,
     Incoming,
@@ -34,6 +42,14 @@ def test_extract_incoming_turns_bot_started_into_start_command() -> None:
     assert _extract_incoming(update) == Incoming(user_id=42, text="/start")
 
 
+def test_extract_incoming_keeps_media_without_text_out_of_the_form() -> None:
+    update = {
+        "update_type": "message_created",
+        "message": {"sender": {"user_id": 42}, "body": {"attachments": [{"type": "image"}]}},
+    }
+    assert _extract_incoming(update) == Incoming(user_id=42, text=None)
+
+
 def test_manual_region_cannot_treat_an_inn_as_a_region() -> None:
     assert _looks_like_inn("9715384111")
     assert _looks_like_inn("342303454473")
@@ -45,6 +61,15 @@ def test_saved_profile_actions_keep_recommendations_and_editing_distinct() -> No
     assert WELCOME_BACK[0]["payload"]["buttons"][0][0]["payload"] == "nav:recommend"
 
 
+def test_unavailable_fns_and_zero_results_keep_recovery_actions() -> None:
+    unavailable = INN_UNAVAILABLE[0]["payload"]["buttons"]
+    assert [row[0]["text"] for row in unavailable] == ["Повторить", "Заполнить вручную"]
+    empty = ZERO_RESULTS[0]["payload"]["buttons"]
+    assert [row[0]["text"] for row in empty] == [
+        "Уточнить детали", "Сообщить, чего не хватает"
+    ]
+
+
 def test_callback_summary_keeps_selected_profile_values_readable() -> None:
     assert _callback_summary(parse_callback("sphere:it_digital")) == "IT и цифровые услуги"
 
@@ -52,7 +77,7 @@ def test_callback_summary_keeps_selected_profile_values_readable() -> None:
 def test_every_sphere_button_has_a_valid_callback() -> None:
     for row in SPHERE[0]["payload"]["buttons"]:
         for button in row:
-            assert parse_callback(button["payload"]).action == "sphere"
+            assert parse_callback(button["payload"]).action in {"sphere", "profile:back"}
 
 
 @pytest.mark.asyncio
@@ -221,8 +246,229 @@ async def test_profile_answers_advance_once_then_confirm(monkeypatch) -> None:
     assert await runtime._handle_profile_answer(42, "sphere", "it_digital")
     assert states.value[0] is ConversationState.MANUAL_STAGE
     assert await runtime._handle_profile_answer(42, "stage", "gt3")
-    assert states.value[0] is ConversationState.MANUAL_EMPLOYEES
-    assert await runtime._handle_profile_answer(42, "employees", "100_plus")
     assert states.value[0] is ConversationState.CONFIRM_PROFILE
     assert not await runtime._handle_profile_answer(42, "sphere", "it_digital")
-    assert len(sent) == 3
+    assert len(sent) == 2
+
+
+@pytest.mark.asyncio
+async def test_media_does_not_change_conversation_state(monkeypatch) -> None:
+    sent = []
+
+    async def send(self, user_id, text, keyboard=None):
+        sent.append(text)
+
+    monkeypatch.setattr(BotRuntime, "_send", send)
+    runtime = object.__new__(BotRuntime)
+    await runtime._handle_text(Incoming(42, text=None))
+    assert "только с текстом" in sent[0]
+
+
+@pytest.mark.asyncio
+async def test_one_character_region_repeats_prompt_without_advancing(monkeypatch) -> None:
+    class States:
+        value = (ConversationState.MANUAL_REGION, {})
+
+        async def get_state(self, user_id):
+            return self.value
+
+        async def set_state(self, user_id, state, context):
+            self.value = (state, context)
+
+    class Session:
+        async def __aenter__(self):
+            return type("Repos", (), {"states": states})()
+
+        async def __aexit__(self, *args):
+            return None
+
+    class Repos:
+        def session(self):
+            return Session()
+
+    sent = []
+
+    async def send(self, user_id, text, keyboard=None):
+        sent.append(text)
+
+    states = States()
+    monkeypatch.setattr(BotRuntime, "_send", send)
+    runtime = object.__new__(BotRuntime)
+    runtime._repos = Repos()
+    await runtime._handle_text(Incoming(42, text="Ы"))
+    assert states.value == (ConversationState.MANUAL_REGION, {})
+    assert "укажите регион" in sent[0]
+
+
+@pytest.mark.asyncio
+async def test_returning_user_gets_actions_without_restarting(monkeypatch) -> None:
+    profile = BusinessProfile(max_user_id=42, region_code="77")
+
+    class States:
+        async def get_state(self, user_id):
+            return (ConversationState.READY, {})
+
+    class Profiles:
+        async def get_by_user(self, user_id):
+            return profile
+
+    class Session:
+        async def __aenter__(self):
+            return type("Repos", (), {"states": States(), "profiles": Profiles()})()
+
+        async def __aexit__(self, *args):
+            return None
+
+    class Repos:
+        def session(self):
+            return Session()
+
+    sent = []
+
+    async def send(self, user_id, text, keyboard=None):
+        sent.append((text, keyboard))
+
+    monkeypatch.setattr(BotRuntime, "_send", send)
+    runtime = object.__new__(BotRuntime)
+    runtime._repos = Repos()
+    await runtime._handle_text(Incoming(42, text="привет"))
+    assert sent[0][0].startswith("С возвращением!")
+    assert sent[0][1][0]["payload"]["buttons"][0][0]["payload"] == "nav:recommend"
+
+
+@pytest.mark.asyncio
+async def test_back_from_sphere_keeps_region_and_reasks_form(monkeypatch) -> None:
+    class States:
+        value = (ConversationState.MANUAL_SPHERE, {"region_code": "77"})
+
+        async def get_state(self, user_id):
+            return self.value
+
+        async def set_state(self, user_id, state, context):
+            self.value = (state, context)
+
+    class Session:
+        async def __aenter__(self):
+            return type("Repos", (), {"states": states})()
+
+        async def __aexit__(self, *args):
+            return None
+
+    class Repos:
+        def session(self):
+            return Session()
+
+    sent = []
+
+    async def send(self, user_id, text, keyboard=None):
+        sent.append(text)
+
+    states = States()
+    monkeypatch.setattr(BotRuntime, "_send", send)
+    runtime = object.__new__(BotRuntime)
+    runtime._repos = Repos()
+    await runtime._handle_callback(Incoming(42, callback_payload="profile:back"))
+    assert states.value == (ConversationState.MANUAL_BUSINESS_FORM, {"region_code": "77"})
+    assert sent == ["Какая у вас форма бизнеса?"]
+
+
+@pytest.mark.asyncio
+async def test_confirmed_fns_profile_shows_measures_without_extra_questions(monkeypatch) -> None:
+    profile = BusinessProfile(
+        max_user_id=42,
+        region_code="77",
+        business_form=BusinessForm.OOO,
+        sphere=SphereCategory.IT_DIGITAL,
+        employee_bucket=EmployeeBucket.OVER_HUNDRED,
+        source=ProfileSource.FNS,
+    )
+
+    class States:
+        value = (ConversationState.CONFIRM_PROFILE, {})
+
+        async def set_state(self, user_id, state, context):
+            self.value = (state, context)
+
+    class Profiles:
+        async def get_by_user(self, user_id):
+            return profile
+
+    class Session:
+        async def __aenter__(self):
+            return type("Repos", (), {"states": states, "profiles": Profiles()})()
+
+        async def __aexit__(self, *args):
+            return None
+
+    class Repos:
+        def session(self):
+            return Session()
+
+    recommended = []
+
+    async def show_recommendations(self, user_id):
+        recommended.append(user_id)
+
+    states = States()
+    monkeypatch.setattr(BotRuntime, "_show_recommendations", show_recommendations)
+    runtime = object.__new__(BotRuntime)
+    runtime._repos = Repos()
+    await runtime._after_profile_confirm(42)
+    assert states.value == (ConversationState.READY, {})
+    assert recommended == [42]
+
+
+@pytest.mark.asyncio
+async def test_fns_lookup_asks_for_missing_staff_before_confirmation(monkeypatch) -> None:
+    class States:
+        value = None
+
+        async def set_state(self, user_id, state, context):
+            self.value = (state, context)
+
+    class Profiles:
+        value = None
+
+        async def get_by_user(self, user_id):
+            return self.value
+
+        async def save(self, profile):
+            self.value = profile
+
+    class Lookup:
+        async def find_by_inn(self, inn):
+            return CompanyLookupResult(
+                CompanyLookupStatus.FOUND,
+                inn,
+                company_name="Тест",
+                region_code="77",
+                business_form=BusinessForm.OOO,
+                primary_okved="62.01",
+            )
+
+    class Session:
+        async def __aenter__(self):
+            return type(
+                "Repos", (), {"states": states, "profiles": profiles, "analytics": None}
+            )()
+
+        async def __aexit__(self, *args):
+            return None
+
+    class Repos:
+        def session(self):
+            return Session()
+
+    sent = []
+
+    async def send(self, user_id, text, keyboard=None):
+        sent.append((text, keyboard))
+
+    states, profiles = States(), Profiles()
+    monkeypatch.setattr(BotRuntime, "_send", send)
+    runtime = object.__new__(BotRuntime)
+    runtime._repos = Repos()
+    runtime._lookup = Lookup()
+    await runtime._lookup_inn(42, "7707083893")
+    assert states.value[0] is ConversationState.MANUAL_EMPLOYEES
+    assert sent[0][0] == "Сколько сотрудников работает в бизнесе?"

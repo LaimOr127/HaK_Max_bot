@@ -70,6 +70,7 @@ class ConversationState(StrEnum):
     RESET_CONFIRM = "RESET_CONFIRM"
     FEEDBACK_REASON = "FEEDBACK_REASON"
     FEEDBACK_TEXT = "FEEDBACK_TEXT"
+    ZERO_FEEDBACK_TEXT = "ZERO_FEEDBACK_TEXT"
     INVESTOR_NAME = "INVESTOR_NAME"
     INVESTOR_CONTACT = "INVESTOR_CONTACT"
     READY = "READY"
@@ -114,4 +115,5 @@ class AnalyticsEventType(StrEnum):
     CHECKLIST_ADDED = "checklist_added"
     CHECKLIST_DOCUMENT_DONE = "checklist_document_done"
     FEEDBACK_SUBMITTED = "feedback_submitted"
+    ZERO_RESULT_FEEDBACK = "zero_result_feedback"
     INVESTOR_INTEREST_SUBMITTED = "investor_interest_submitted"

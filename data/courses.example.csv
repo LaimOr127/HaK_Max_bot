@@ -1,4 +1,0 @@
-name,is_free,description,url,source_name,sphere,is_active
-DEMO — Финансы для предпринимателя,true,Короткий вводный курс,https://example.com/courses/finance,Демонстрационный источник,,true
-DEMO — Запуск цифрового продукта,true,Практикум для IT-команд,https://example.com/courses/digital,Демонстрационный источник,it_digital,true
-DEMO — Продажи локального бизнеса,true,Материалы для торговли и услуг,https://example.com/courses/sales,Демонстрационный источник,retail,true

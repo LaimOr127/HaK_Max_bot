@@ -399,3 +399,29 @@ async def test_compare_api_returns_only_signed_measures_and_shared_checklist(mon
     with pytest.raises(HTTPException) as exc:
         await miniapp.compare_data(request, f"{FIRST},33333333-3333-4333-8333-333333333333")
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_compare_remove_asks_in_chat_only_for_allowed_measure(monkeypatch) -> None:
+    sent = []
+
+    class Client:
+        async def send_message(self, message, *, user_id):
+            sent.append((message.text, user_id))
+
+    async def authorized(request, raw):
+        assert raw == "signed"
+        return 42, (FIRST, SECOND), True
+
+    monkeypatch.setattr(miniapp, "_authorized", authorized)
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(max_client=Client())))
+
+    assert await miniapp.remove_from_comparison(FIRST, request, "signed") == {"sent": True}
+    assert sent == [("Уберём эту меру — ищем ещё варианты?", 42)]
+
+    with pytest.raises(HTTPException) as exc:
+        await miniapp.remove_from_comparison(
+            UUID("33333333-3333-4333-8333-333333333333"), request, "signed"
+        )
+    assert exc.value.status_code == 403
+    assert len(sent) == 1

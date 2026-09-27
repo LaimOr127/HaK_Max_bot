@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import re
 import time
 from dataclasses import replace
@@ -339,6 +340,28 @@ async def compare_data(
     return {"measures": result}
 
 
+@router.post("/api/miniapp/compare/{measure_id}/remove")
+async def remove_from_comparison(
+    measure_id: UUID,
+    request: Request,
+    x_max_init_data: str | None = Header(default=None),
+) -> dict[str, bool]:
+    user_id, allowed_ids, _ = await _authorized(request, x_max_init_data)
+    if measure_id not in allowed_ids:
+        raise HTTPException(403, "measure is not in this comparison")
+    client = request.app.state.max_client
+    if client is None:
+        raise HTTPException(503, "MAX bot is unavailable")
+    try:
+        await client.send_message(
+            NewMessageBody(text="Уберём эту меру — ищем ещё варианты?"), user_id=user_id
+        )
+    except Exception as exc:
+        logging.getLogger(__name__).exception("could not send comparison removal question")
+        raise HTTPException(502, "Не удалось отправить сообщение в чат.") from exc
+    return {"sent": True}
+
+
 @router.get("/api/miniapp/measures/{measure_id}")
 async def measure_detail(
     measure_id: UUID,
@@ -395,10 +418,11 @@ async def change_checklist(
     client = request.app.state.max_client
     if client is not None and measure is not None:
         try:
-            action = "добавлена в чек-лист" if adding else "удалена из чек-листа"
-            await client.send_message(
-                NewMessageBody(text=f"«{measure.name}» {action}."), user_id=user_id
+            text = (
+                f"Добавлено! Напомню о сроках позже. «{measure.name}» — в чек-листе."
+                if adding else f"«{measure.name}» убрана из чек-листа."
             )
+            await client.send_message(NewMessageBody(text=text), user_id=user_id)
         except Exception:
             import logging
 

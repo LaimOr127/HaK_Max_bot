@@ -15,7 +15,7 @@ def inline_keyboard(rows: Iterable[Iterable[Button]]) -> list[dict[str, object]]
 
 WELCOME = inline_keyboard(
     [
-        [("Начать подбор", "nav:start")],
+        [("Начать", "nav:start")],
         [("Как это работает?", "nav:how")],
     ]
 )
@@ -27,12 +27,24 @@ WELCOME_BACK = inline_keyboard(
         [("Проверить другой ИНН", "nav:start")],
     ]
 )
+RETURNING = inline_keyboard(
+    [
+        [("Показать меры ещё раз", "nav:recommend")],
+        [("Мой чек-лист", "nav:checklist")],
+        [("Изменить профиль", "profile:edit")],
+        [("Помощь", "nav:help")],
+    ]
+)
 INN = inline_keyboard([[("Заполнить вручную", "inn:manual")]])
+INN_INVALID = INN
 INN_ERROR = inline_keyboard(
     [
-        [("Ввести снова", "inn:retry")],
+        [("Ввести заново", "inn:retry")],
         [("Заполнить вручную", "inn:manual")],
     ]
+)
+INN_UNAVAILABLE = inline_keyboard(
+    [[("Повторить", "inn:retry")], [("Заполнить вручную", "inn:manual")]]
 )
 BUSINESS_FORM = inline_keyboard(
     [
@@ -52,6 +64,7 @@ SPHERE = inline_keyboard(
         [("Красота", "sphere:beauty_health"), ("Здоровье и медицина", "sphere:health")],
         [("Образование", "sphere:education"), ("Туризм", "sphere:tourism")],
         [("Транспорт и логистика", "sphere:transport_logistics"), ("Прочее", "sphere:other")],
+        [("Назад", "profile:back")],
     ]
 )
 STAGE = inline_keyboard(
@@ -77,8 +90,14 @@ PROFILE_SAVED = inline_keyboard(
 )
 RESET = inline_keyboard(
     [
-        [("Да, удалить", "reset:confirm")],
+        [("Да, сбросить", "reset:confirm")],
         [("Отмена", "reset:cancel")],
+    ]
+)
+ZERO_RESULTS = inline_keyboard(
+    [
+        [("Уточнить детали", "profile:edit")],
+        [("Сообщить, чего не хватает", "nav:zero_feedback")],
     ]
 )
 INVESTOR = inline_keyboard(
@@ -89,11 +108,14 @@ INVESTOR = inline_keyboard(
 )
 
 
-def measure(measure_id: str) -> list[dict[str, object]]:
+def measure(measure_id: str, *, in_checklist: bool = False) -> list[dict[str, object]]:
     return inline_keyboard(
         [
             [("Подробнее", f"measure:details:{measure_id}")],
-            [("В чек-лист", f"measure:add:{measure_id}")],
+            [
+                ("✓ В чек-листе", f"measure:remove_ask:{measure_id}")
+                if in_checklist else ("Добавить в чек-лист", f"measure:add:{measure_id}")
+            ],
             [("Мера не подходит", f"measure:feedback:{measure_id}")],
         ]
     )
@@ -109,7 +131,7 @@ def compare(web_app: str, first_id: str, second_id: str) -> list[dict[str, objec
                     "text": "Сравнить",
                     "web_app": web_app,
                     "payload": f"compare_{first_id}_{second_id}",
-                }]]
+                }], [{"type": "callback", "text": "Не нужно", "payload": "nav:skip_compare"}]]
             },
         }
     ]
@@ -125,7 +147,8 @@ def home(web_app: str) -> list[dict[str, object]]:
                     "text": "Открыть навигатор",
                     "web_app": web_app,
                     "payload": "home",
-                }]]
+                }], [{"type": "callback", "text": "Начать", "payload": "nav:start"}],
+                [{"type": "callback", "text": "Как это работает?", "payload": "nav:how"}]]
             },
         }
     ]

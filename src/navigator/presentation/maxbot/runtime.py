@@ -9,17 +9,19 @@ from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from navigator.application.checklists import ChecklistService
 from navigator.application.dto import FeedbackInput, InvestorLeadInput
 from navigator.application.feedback import FeedbackService
 from navigator.application.investors import InvestorService
-from navigator.application.onboarding import OnboardingService
+from navigator.application.onboarding import OnboardingService, normalize_region
 from navigator.application.profiles import ProfileService
 from navigator.application.recommendations import RecommendationService
 from navigator.domain.entities import BusinessProfile
 from navigator.domain.enums import (
+    AnalyticsEventType,
     BusinessForm,
     BusinessStage,
     ConversationState,
@@ -35,6 +37,7 @@ from navigator.domain.errors import (
     InvalidInn,
     ProfileIncomplete,
 )
+from navigator.infrastructure.db import models as db
 from navigator.infrastructure.db.repositories import SqlAlchemyRepositories
 from navigator.infrastructure.fns.adapter import CompanyLookupAdapter
 from navigator.infrastructure.max_api.client import MaxApiClient
@@ -98,6 +101,9 @@ class BotRuntime:
 
     async def _handle_text(self, incoming: Incoming) -> None:
         text = (incoming.text or "").strip()
+        if not text:
+            await self._send(incoming.user_id, messages.UNSUPPORTED)
+            return
         if text == "/help":
             await self._send(incoming.user_id, messages.HELP)
             return
@@ -126,7 +132,10 @@ class BotRuntime:
                 if _looks_like_inn(text):
                     await self._lookup_inn(incoming.user_id, text)
                     return
-                context["region_code"] = _region_code(text)
+                if len(text) < 2:
+                    await self._send(incoming.user_id, messages.REGION_INVALID)
+                    return
+                context["region_code"] = normalize_region(text)
                 await repos.states.set_state(
                     incoming.user_id, ConversationState.MANUAL_BUSINESS_FORM, context
                 )
@@ -142,21 +151,40 @@ class BotRuntime:
                     )
                 )
                 await repos.states.set_state(incoming.user_id, ConversationState.READY, {})
-                await self._send(incoming.user_id, "Спасибо, сохранили обратную связь.")
+                await self._send(incoming.user_id, "Спасибо, передали команде.")
+            elif current is ConversationState.ZERO_FEEDBACK_TEXT:
+                await repos.analytics.track(
+                    AnalyticsEventType.ZERO_RESULT_FEEDBACK,
+                    max_user_id=incoming.user_id,
+                    properties={"comment": text[:1000]},
+                )
+                await repos.states.set_state(incoming.user_id, ConversationState.READY, {})
+                await self._send(incoming.user_id, "Спасибо, передали команде.")
             elif current is ConversationState.INVESTOR_NAME:
                 context["investor_name"] = text
                 await repos.states.set_state(
                     incoming.user_id, ConversationState.INVESTOR_CONTACT, context
                 )
                 await self._send(
-                    incoming.user_id, "Куда написать о запуске? Подойдёт телефон, email или @ник."
+                    incoming.user_id, "Оставьте контакт для связи — телефон, email или @ник."
                 )
             elif current is ConversationState.INVESTOR_CONTACT:
                 await InvestorService(repos.investors, repos.analytics).submit_interest(
                     InvestorLeadInput(incoming.user_id, str(context.get("investor_name", "")), text)
                 )
                 await repos.states.set_state(incoming.user_id, ConversationState.READY, {})
-                await self._send(incoming.user_id, "Готово, сообщим о запуске.")
+                await self._send(incoming.user_id, "Спасибо! Свяжемся при запуске.")
+            elif current in {ConversationState.IDLE, ConversationState.READY}:
+                profile = await ProfileService(repos.profiles).get_profile(incoming.user_id)
+                if profile is None:
+                    await OnboardingService(
+                        repos.states, repos.profiles, self._lookup, repos.analytics
+                    ).start(incoming.user_id)
+                    await self._send(incoming.user_id, messages.WELCOME, keyboards.WELCOME)
+                else:
+                    await self._send(
+                        incoming.user_id, messages.RETURNING, keyboards.RETURNING
+                    )
             else:
                 await self._send(incoming.user_id, messages.UNSUPPORTED)
 
@@ -179,7 +207,7 @@ class BotRuntime:
             return
         if action == "nav:how":
             await self._close_callback(incoming, _callback_summary(callback))
-            await self._send(incoming.user_id, messages.HOW_IT_WORKS)
+            await self._send(incoming.user_id, messages.HOW_IT_WORKS, keyboards.WELCOME)
             return
         if action == "nav:profile":
             await self._close_callback(incoming, _callback_summary(callback))
@@ -192,6 +220,24 @@ class BotRuntime:
         if action == "nav:recommend":
             await self._close_callback(incoming)
             await self._show_recommendations(incoming.user_id)
+            return
+        if action == "nav:help":
+            await self._close_callback(incoming)
+            await self._send(incoming.user_id, messages.HELP)
+            return
+        if action == "nav:skip_compare":
+            async with self._repos.session() as repos:
+                await repos.states.set_state(incoming.user_id, ConversationState.READY, {})
+            await self._close_callback(incoming, "Сравнение пропущено")
+            await self._send(incoming.user_id, "Хорошо, если что — уточните ещё раз.")
+            return
+        if action == "nav:zero_feedback":
+            async with self._repos.session() as repos:
+                await repos.states.set_state(
+                    incoming.user_id, ConversationState.ZERO_FEEDBACK_TEXT, {}
+                )
+            await self._close_callback(incoming)
+            await self._send(incoming.user_id, "Расскажите, какой меры вам не хватило.")
             return
         if action == "inn:manual":
             async with self._repos.session() as repos:
@@ -209,6 +255,18 @@ class BotRuntime:
                 return
             await self._after_profile_confirm(incoming.user_id)
             await self._close_callback(incoming)
+            return
+        if action == "profile:back":
+            async with self._repos.session() as repos:
+                state = await repos.states.get_state(incoming.user_id)
+                if state is None or state[0] is not ConversationState.MANUAL_SPHERE:
+                    await self._acknowledge_callback(incoming)
+                    return
+                await repos.states.set_state(
+                    incoming.user_id, ConversationState.MANUAL_BUSINESS_FORM, state[1]
+                )
+            await self._close_callback(incoming, "Назад")
+            await self._send(incoming.user_id, messages.FORM_PROMPT, keyboards.BUSINESS_FORM)
             return
         if action in {"profile:edit", "profile:edit_manual"}:
             async with self._repos.session() as repos:
@@ -241,12 +299,44 @@ class BotRuntime:
             await self._show_measure_details(incoming.user_id, callback.uuid())
             return
         if action == "measure:add":
-            await self._acknowledge_callback(incoming)
             async with self._repos.session() as repos:
                 await ChecklistService(
                     repos.checklists, repos.measures, repos.analytics
                 ).add_measure(incoming.user_id, callback.uuid())
-            await self._send(incoming.user_id, "Добавили в чек-лист. Откройте /checklist.")
+            await self._close_callback(incoming, "Добавлено в чек-лист")
+            await self._send(
+                incoming.user_id,
+                "Добавлено! Напомню о сроках позже.",
+                keyboards.measure(str(callback.uuid()), in_checklist=True),
+            )
+            return
+        if action == "measure:remove_ask":
+            await self._close_callback(incoming)
+            await self._send(
+                incoming.user_id,
+                "Убрать из чек-листа?",
+                keyboards.inline_keyboard(
+                    [[("Да, убрать", f"measure:remove_confirm:{callback.values[0]}")],
+                     [("Отмена", f"measure:remove_cancel:{callback.values[0]}")]]
+                ),
+            )
+            return
+        if action == "measure:remove_confirm":
+            async with self._repos.session() as repos:
+                await ChecklistService(repos.checklists, repos.measures).remove_measure(
+                    incoming.user_id, callback.uuid()
+                )
+            await self._close_callback(incoming)
+            await self._send(
+                incoming.user_id, "Убрано из чек-листа.", keyboards.measure(callback.values[0])
+            )
+            return
+        if action == "measure:remove_cancel":
+            await self._close_callback(incoming)
+            await self._send(
+                incoming.user_id, "Оставили в чек-листе.",
+                keyboards.measure(callback.values[0], in_checklist=True),
+            )
             return
         if action == "document:toggle":
             await self._acknowledge_callback(incoming)
@@ -259,6 +349,7 @@ class BotRuntime:
         if action == "measure:feedback":
             await self._acknowledge_callback(incoming)
             async with self._repos.session() as repos:
+                measure = await repos.measures.get(callback.uuid())
                 await repos.states.set_state(
                     incoming.user_id,
                     ConversationState.FEEDBACK_REASON,
@@ -266,26 +357,38 @@ class BotRuntime:
                 )
             await self._send(
                 incoming.user_id,
-                "Что не так с мерой?",
+                f"Спасибо, что сообщили! Что не так с «{measure.name if measure else 'мерой'}»?",
                 keyboards.inline_keyboard(
                     [
-                        [("Не подхожу", f"feedback:not_eligible:{callback.values[0]}")],
-                        [("Условия устарели", f"feedback:outdated:{callback.values[0]}")],
+                        [("Не подхожу по условиям", f"feedback:not_eligible:{callback.values[0]}")],
+                        [("Устарела информация", f"feedback:outdated:{callback.values[0]}")],
                         [("Другое", f"feedback:other:{callback.values[0]}")],
                     ]
                 ),
             )
             return
         if action.startswith("feedback:"):
-            await self._acknowledge_callback(incoming)
             feedback_type = action.split(":", 1)[1]
             async with self._repos.session() as repos:
-                await repos.states.set_state(
-                    incoming.user_id,
-                    ConversationState.FEEDBACK_TEXT,
-                    {"measure_id": callback.values[0], "feedback_type": feedback_type},
-                )
-            await self._send(incoming.user_id, "Напишите короткий комментарий.")
+                if feedback_type == "other":
+                    await repos.states.set_state(
+                        incoming.user_id,
+                        ConversationState.FEEDBACK_TEXT,
+                        {"measure_id": callback.values[0], "feedback_type": feedback_type},
+                    )
+                else:
+                    await FeedbackService(repos.feedback, repos.analytics).submit(
+                        FeedbackInput(
+                            incoming.user_id, callback.uuid(), FeedbackType(feedback_type), None
+                        )
+                    )
+                    await repos.states.set_state(incoming.user_id, ConversationState.READY, {})
+            await self._close_callback(incoming)
+            await self._send(
+                incoming.user_id,
+                "Расскажите своими словами." if feedback_type == "other"
+                else "Спасибо, передали команде.",
+            )
             return
         if action == "investor:yes":
             await self._acknowledge_callback(incoming)
@@ -294,10 +397,10 @@ class BotRuntime:
             await self._send(incoming.user_id, "Как к вам обращаться?")
             return
         if action == "investor:no":
-            await self._acknowledge_callback(incoming)
             async with self._repos.session() as repos:
                 await InvestorService(repos.investors).decline(incoming.user_id)
-            await self._send(incoming.user_id, "Хорошо.")
+            await self._close_callback(incoming)
+            await self._send(incoming.user_id, "Хорошо, больше не буду спрашивать.")
             return
         await self._send(incoming.user_id, "Действие пока недоступно.")
 
@@ -321,20 +424,29 @@ class BotRuntime:
             await self._show_recommendations(user_id)
 
     async def _lookup_inn(self, user_id: int, text: str) -> None:
+        needs_staff = False
         async with self._repos.session() as repos:
             try:
                 profile = await OnboardingService(
                     repos.states, repos.profiles, self._lookup, repos.analytics
                 ).lookup_inn(user_id, text)
             except InvalidInn:
-                await self._send(user_id, messages.INN_INVALID, keyboards.INN_ERROR)
+                await self._send(user_id, messages.INN_INVALID, keyboards.INN_INVALID)
                 return
             except CompanyNotFound:
                 await self._send(user_id, messages.INN_NOT_FOUND, keyboards.INN_ERROR)
                 return
             except CompanyLookupUnavailable:
-                await self._send(user_id, messages.INN_UNAVAILABLE, keyboards.INN_ERROR)
+                await self._send(user_id, messages.INN_UNAVAILABLE, keyboards.INN_UNAVAILABLE)
                 return
+            needs_staff = profile.employee_bucket is None and profile.employee_count is None
+            if needs_staff:
+                await repos.states.set_state(
+                    user_id, ConversationState.MANUAL_EMPLOYEES, _context_from_profile(profile)
+                )
+        if needs_staff:
+            await self._send(user_id, messages.EMPLOYEES_PROMPT, keyboards.EMPLOYEES)
+            return
         await self._send(user_id, render_profile(profile), keyboards.CONFIRM)
 
     async def _after_profile_confirm(self, user_id: int) -> None:
@@ -399,7 +511,7 @@ class BotRuntime:
                 repos.investors
             ).should_prompt(user_id)
         if not recommendations:
-            await self._send(user_id, messages.ZERO_RESULTS)
+            await self._send(user_id, messages.ZERO_RESULTS, keyboards.ZERO_RESULTS)
             return
         for item, measure in zip(recommendations, measures, strict=True):
             if measure is None:
@@ -418,13 +530,43 @@ class BotRuntime:
             first, second = recommendations[:2]
             await self._send(
                 user_id,
-                "Сравните две меры рядом — условия, суммы и документы.",
+                "Хотите сравнить эти меры между собой?",
                 keyboards.compare(
                     self._miniapp_web_app, str(first.measure_id), str(second.measure_id)
                 ),
             )
+        await self._show_courses(user_id)
         if prompt_investor:
             await self._send(user_id, messages.INVESTOR_PROMPT, keyboards.INVESTOR)
+
+    async def _show_courses(self, user_id: int) -> None:
+        async with self._repos.session() as repos:
+            profile = await ProfileService(repos.profiles).get_profile(user_id)
+            sphere = profile.sphere.value if profile and profile.sphere else None
+            courses = (
+                await repos.session.scalars(
+                    select(db.Course)
+                    .outerjoin(
+                        db.SphereCategory,
+                        db.Course.sphere_category_id == db.SphereCategory.id,
+                    )
+                    .where(
+                        db.Course.is_active.is_(True),
+                        db.Course.is_free.is_(True),
+                        or_(
+                            db.Course.sphere_category_id.is_(None),
+                            db.SphereCategory.code == sphere,
+                        ),
+                    )
+                    .order_by(db.Course.sphere_category_id.is_(None), db.Course.name)
+                    .limit(2)
+                )
+            ).all()
+        if courses:
+            lines = "\n".join(f"• {course.name}: {course.url}" for course in courses)
+            await self._send(
+                user_id, f"Также нашла несколько бесплатных курсов по вашей теме:\n\n{lines}"
+            )
 
     async def _show_measure_details(self, user_id: int, measure_id: UUID) -> None:
         async with self._repos.session() as repos:
@@ -606,10 +748,8 @@ def _missing_profile_step(profile: BusinessProfile) -> ConversationState | None:
         return ConversationState.MANUAL_BUSINESS_FORM
     if profile.sphere is None:
         return ConversationState.MANUAL_SPHERE
-    if profile.business_stage is None:
+    if profile.business_stage is None and profile.source is ProfileSource.MANUAL:
         return ConversationState.MANUAL_STAGE
-    if profile.employee_bucket is None and profile.employee_count is None:
-        return ConversationState.MANUAL_EMPLOYEES
     return None
 
 
@@ -676,14 +816,3 @@ def _enum(enum: Callable[[str], Any], value: object, fallback: Any) -> Any:
 
 def _maybe_value(value: Any) -> str | None:
     return None if value is None else str(value)
-
-
-def _region_code(text: str) -> str:
-    raw = text.strip().lower()
-    if raw.isdigit():
-        return raw
-    if "татар" in raw:
-        return "16"
-    if "москов" in raw and "обл" in raw:
-        return "50"
-    return "77" if "моск" in raw else raw[:16]

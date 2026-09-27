@@ -54,7 +54,7 @@ async def seed_demo(data_dir: Path | None = None) -> None:
             if current_errors:
                 raise ValueError("\n".join(str(error) for error in current_errors))
             await import_rows(session, current_measures)
-            await _seed_courses(session, data_dir / "courses.example.csv")
+            await _seed_courses(session, data_dir / "courses.current.csv")
 
 
 async def _seed_spheres(session: AsyncSession, path: Path) -> None:
@@ -90,7 +90,8 @@ async def _seed_courses(session: AsyncSession, path: Path) -> None:
         sphere.code: sphere.id for sphere in await session.scalars(select(models.SphereCategory))
     }
     with path.open("r", encoding="utf-8-sig", newline="") as file:
-        for row in csv.DictReader(file):
+        rows = list(csv.DictReader(file))
+        for row in rows:
             course = await session.scalar(
                 select(models.Course).where(models.Course.name == row["name"])
             )
@@ -103,6 +104,11 @@ async def _seed_courses(session: AsyncSession, path: Path) -> None:
             course.source_name = row["source_name"]
             course.sphere_category_id = sphere_ids.get(row["sphere"])
             course.is_active = row["is_active"].strip().lower() == "true"
+    await session.execute(
+        update(models.Course)
+        .where(models.Course.name.not_in([row["name"] for row in rows]))
+        .values(is_active=False)
+    )
 
 
 def _expand_okved(value: str) -> tuple[str, ...]:
