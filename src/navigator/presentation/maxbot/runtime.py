@@ -313,11 +313,12 @@ class BotRuntime:
             if profile is None:
                 greeting += "\n\nДля подбора отправьте ИНН сообщением сюда."
             await self._send(user_id, greeting, keyboards.home(self._miniapp_web_app))
-            return
-        if profile is None:
+        elif profile is None:
             await self._send(user_id, messages.WELCOME, keyboards.WELCOME)
         else:
             await self._send(user_id, messages.WELCOME_BACK, keyboards.WELCOME_BACK)
+        if profile is not None and _missing_profile_step(profile) is None:
+            await self._show_recommendations(user_id)
 
     async def _lookup_inn(self, user_id: int, text: str) -> None:
         async with self._repos.session() as repos:

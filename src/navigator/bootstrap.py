@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from navigator.application.reminders import ReminderService
 from navigator.config import get_settings
 from navigator.infrastructure.db.repositories import SqlAlchemyReminderRepository
+from navigator.infrastructure.fns.adapter import CompanyLookupAdapter
 from navigator.infrastructure.fns.local_snapshot import LocalSnapshotCompanyLookup
 from navigator.infrastructure.fns.mock import MockCompanyLookup
 from navigator.infrastructure.fns.rmsp_portal import RmspPortalCompanyLookup
@@ -48,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.redis = redis
     app.state.bot_runtime = None
     app.state.max_client = None
-    app.state.company_lookup = company_lookup
+    app.state.company_lookup = CompanyLookupAdapter(company_lookup)
 
     if settings.max_bot_token is not None:
         max_client = MaxApiClient(

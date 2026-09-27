@@ -1,7 +1,13 @@
 import pytest
 
 from navigator.domain.entities import BusinessProfile
-from navigator.domain.enums import BusinessForm, ConversationState
+from navigator.domain.enums import (
+    BusinessForm,
+    BusinessStage,
+    ConversationState,
+    EmployeeBucket,
+    SphereCategory,
+)
 from navigator.presentation.maxbot.callbacks import parse_callback
 from navigator.presentation.maxbot.keyboards import SPHERE, WELCOME_BACK
 from navigator.presentation.maxbot.runtime import (
@@ -122,6 +128,52 @@ async def test_start_with_miniapp_sets_inn_state_and_shows_one_app_entry(monkeyp
     assert len(sent) == 1
     assert "ИНН" in sent[0][1]
     assert sent[0][2][0]["payload"]["buttons"][0][0]["type"] == "open_app"
+
+
+@pytest.mark.asyncio
+async def test_start_with_complete_profile_shows_recommendations(monkeypatch) -> None:
+    profile = BusinessProfile(
+        max_user_id=42,
+        region_code="77",
+        business_form=BusinessForm.OOO,
+        sphere=SphereCategory.IT_DIGITAL,
+        business_stage=BusinessStage.GT3,
+        employee_bucket=EmployeeBucket.OVER_HUNDRED,
+    )
+
+    class Profiles:
+        async def get_by_user(self, user_id):
+            assert user_id == 42
+            return profile
+
+    class Session:
+        async def __aenter__(self):
+            return type("Repos", (), {"profiles": Profiles()})()
+
+        async def __aexit__(self, *args):
+            return None
+
+    class Repos:
+        def session(self):
+            return Session()
+
+    sent = []
+    recommended = []
+
+    async def send(self, user_id, text, keyboard=None):
+        sent.append((user_id, text, keyboard))
+
+    async def show_recommendations(self, user_id):
+        recommended.append(user_id)
+
+    monkeypatch.setattr(BotRuntime, "_send", send)
+    monkeypatch.setattr(BotRuntime, "_show_recommendations", show_recommendations)
+    runtime = object.__new__(BotRuntime)
+    runtime._repos = Repos()
+    runtime._miniapp_web_app = "demo_bot"
+    await runtime._start(42)
+    assert sent[0][2][0]["payload"]["buttons"][0][0]["type"] == "open_app"
+    assert recommended == [42]
 
 
 @pytest.mark.asyncio

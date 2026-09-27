@@ -1,3 +1,8 @@
+from types import SimpleNamespace
+
+from fastapi import FastAPI
+
+from navigator import bootstrap
 from navigator.domain.enums import CompanyLookupStatus, MspCategory
 from navigator.infrastructure.fns.adapter import CompanyLookupAdapter
 from navigator.infrastructure.fns.schemas import CompanyLookupResult, CompanySnapshot
@@ -9,6 +14,23 @@ class Lookup:
 
     async def lookup_by_inn(self, _inn: str) -> CompanyLookupResult:
         return self.result
+
+
+async def test_lifespan_exposes_adapted_lookup_to_miniapp(monkeypatch) -> None:
+    monkeypatch.setattr(
+        bootstrap,
+        "settings",
+        SimpleNamespace(
+            database_url="postgresql+asyncpg://user:password@localhost/test",
+            redis_url="redis://localhost:6379/0",
+            fns_provider="mock",
+            max_bot_token=None,
+        ),
+    )
+    app = FastAPI()
+    async with bootstrap.lifespan(app):
+        assert isinstance(app.state.company_lookup, CompanyLookupAdapter)
+        assert hasattr(app.state.company_lookup, "find_by_inn")
 
 
 async def test_adapter_maps_found_company_to_application_contract() -> None:
