@@ -97,7 +97,9 @@ async def test_miniapp_page_is_served_without_mock_data() -> None:
     assert response.status_code == 200
     assert home_response.status_code == 200
     assert "/api/miniapp/home" in home_response.text
-    assert '<script src="https://st.max.ru/js/max-web-app.js" async></script>' in response.text
+    assert '<script src="https://st.max.ru/js/max-web-app.js" defer></script>' in response.text
+    assert "new AbortController()" in response.text
+    assert "window.fetch" in response.text
     assert "/api/miniapp/compare" in response.text
     assert "window.Max && window.Max.WebApp" in response.text
     assert 'queryValue("WebAppData")' in response.text
@@ -189,7 +191,7 @@ async def test_web_onboarding_lookup_complete_and_recommend(monkeypatch) -> None
         assert response.status_code == 409
         response = await client.post(
             "/api/miniapp/profile",
-            json={"sphere": "it_digital", "business_stage": "gt3", "employee_bucket": "16_100"},
+            json={"sphere": "it", "business_stage": "gt3", "employee_bucket": "16_100"},
             headers=headers,
         )
         assert response.status_code == 200
@@ -226,7 +228,7 @@ async def test_home_api_uses_signed_user_profile(monkeypatch) -> None:
     profile = SimpleNamespace(
         region_code="77",
         business_form="ooo",
-        sphere="it_digital",
+        sphere="it",
         business_stage="gt3",
         employee_bucket="16_100",
         inn="9715384111",

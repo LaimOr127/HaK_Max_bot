@@ -1,0 +1,107 @@
+configVersion: 1
+solutionName: "MAX Benefit Navigator"
+repository: "https://github.com/LaimOr127/HaK_Max_bot.git"
+openapi: "./openapi.json"
+baseUrl:
+  local: "http://localhost:8000"
+  production: "https://<bot-domain>"
+auth:
+  type: "MAX Bridge init data"
+  header: "X-Max-Init-Data"
+  note: "Значение выдаёт MAX WebView. Тестовые значения нельзя зафиксировать заранее без MAX_BOT_TOKEN, потому что подпись зависит от токена и auth_date."
+roles:
+  - name: "max_user"
+    description: "Обычный пользователь miniapp, открывший приложение из MAX."
+requiredChecks:
+  - name: "Health"
+    role: "anonymous"
+    method: "GET"
+    path: "/health/ready"
+    expectedStatus: 200
+    responseFormat:
+      status: "string"
+  - name: "Miniapp page"
+    role: "anonymous"
+    method: "GET"
+    path: "/miniapp"
+    expectedStatus: 200
+    responseFormat: "text/html"
+  - name: "Home data requires signed MAX init data"
+    role: "max_user"
+    method: "GET"
+    path: "/api/miniapp/home"
+    expectedStatuses: [200, 401]
+    successCriteria: "200 с валидным X-Max-Init-Data, 401 без подписи."
+    responseFormat:
+      profile: "object|null"
+      profile_complete: "boolean"
+      recommendations: "array"
+      checklist: "array"
+  - name: "Lookup by INN"
+    role: "max_user"
+    method: "POST"
+    path: "/api/miniapp/lookup"
+    bodyExample:
+      inn: "7707049388"
+    expectedStatuses: [200, 400, 404, 503]
+    responseFormat:
+      profile: "object"
+  - name: "Manual profile fallback"
+    role: "max_user"
+    method: "POST"
+    path: "/api/miniapp/manual"
+    bodyExample:
+      region_code: "77"
+      business_form: "ooo"
+      sphere: "it"
+      business_stage: "gt3"
+      employee_bucket: "100_plus"
+    expectedStatus: 200
+    responseFormat:
+      profile: "object"
+  - name: "Confirm profile"
+    role: "max_user"
+    method: "POST"
+    path: "/api/miniapp/confirm"
+    expectedStatuses: [200, 404, 409]
+    responseFormat:
+      profile: "object"
+  - name: "Compare two measures"
+    role: "max_user"
+    method: "GET"
+    path: "/api/miniapp/compare?ids=<uuid>,<uuid>"
+    expectedStatuses: [200, 400, 403, 404]
+    responseFormat:
+      measures: "array"
+  - name: "Remove measure from comparison"
+    role: "max_user"
+    method: "POST"
+    path: "/api/miniapp/compare/<uuid>/remove"
+    expectedStatuses: [200, 403, 502, 503]
+    responseFormat:
+      sent: "boolean"
+  - name: "Measure details"
+    role: "max_user"
+    method: "GET"
+    path: "/api/miniapp/measures/<uuid>"
+    expectedStatuses: [200, 403, 404]
+    responseFormat:
+      id: "uuid"
+      name: "string"
+      documents: "array"
+      checklisted: "boolean"
+  - name: "Checklist add/remove"
+    role: "max_user"
+    methods: ["POST", "DELETE"]
+    path: "/api/miniapp/checklist/<uuid>"
+    expectedStatuses: [200, 403]
+    responseFormat:
+      checklisted: "boolean"
+testData:
+  innCsv: "./test-data/test-inn.csv"
+  miniappRequests: "./test-data/miniapp-requests.json"
+  expectedBehavior: "./test-data/expected-behavior.json"
+knownLimitations:
+  - "База мер curated CSV, не live-интеграция с МСП.РФ."
+  - "ФНС/RMSP lookup зависит от внешнего сервиса; ручная анкета является обязательным fallback."
+  - "Тестовые X-Max-Init-Data создаются только внутри MAX WebView или тестом с известным MAX_BOT_TOKEN."

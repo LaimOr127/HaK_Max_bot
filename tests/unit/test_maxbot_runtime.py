@@ -71,7 +71,7 @@ def test_unavailable_fns_and_zero_results_keep_recovery_actions() -> None:
 
 
 def test_callback_summary_keeps_selected_profile_values_readable() -> None:
-    assert _callback_summary(parse_callback("sphere:it_digital")) == "IT и цифровые услуги"
+    assert _callback_summary(parse_callback("sphere:it")) == "IT и цифровые услуги"
 
 
 def test_every_sphere_button_has_a_valid_callback() -> None:
@@ -243,11 +243,11 @@ async def test_profile_answers_advance_once_then_confirm(monkeypatch) -> None:
     runtime._repos = Repos()
     monkeypatch.setattr(BotRuntime, "_send", send)
 
-    assert await runtime._handle_profile_answer(42, "sphere", "it_digital")
+    assert await runtime._handle_profile_answer(42, "sphere", "it")
     assert states.value[0] is ConversationState.MANUAL_STAGE
     assert await runtime._handle_profile_answer(42, "stage", "gt3")
     assert states.value[0] is ConversationState.CONFIRM_PROFILE
-    assert not await runtime._handle_profile_answer(42, "sphere", "it_digital")
+    assert not await runtime._handle_profile_answer(42, "sphere", "it")
     assert len(sent) == 2
 
 

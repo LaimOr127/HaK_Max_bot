@@ -34,6 +34,10 @@ curl http://localhost:8000/health/ready
 `worker`. Docker Compose v2 сам видит файл `compose.yml`, поэтому флаг `-f` для
 локального запуска не нужен.
 
+Локальные порты: API `8000`, PostgreSQL `127.0.0.1:5432`, Redis
+`127.0.0.1:6379`. В production наружу открыт только Caddy (`80/443`);
+API `8000`, PostgreSQL и Redis доступны контейнерам внутренней сети Compose.
+
 Если нужен локальный Python workflow:
 
 ```bash
@@ -129,6 +133,7 @@ API miniapp:
 - `POST /api/miniapp/confirm` — подтверждение полного профиля
 - `GET /api/miniapp/measures/{measure_id}` — подробности рекомендованной меры
 - `GET /api/miniapp/compare?ids=<uuid>,<uuid>`
+- `POST /api/miniapp/compare/{measure_id}/remove` — вопрос в чате при удалении колонки
 - `POST /api/miniapp/checklist/{measure_id}`
 - `DELETE /api/miniapp/checklist/{measure_id}`
 
@@ -163,8 +168,8 @@ flow остается рабочим.
 
 - `measures.example.csv` содержит synthetic demo-меры для локальной разработки.
 - `measures.current.csv` содержит curated меры для production/MVP.
-- `sphere_categories.csv` и `okved_mapping.csv` нужны для профиля и маппинга ОКВЭД.
-- `courses.example.csv` сидится как справочник курсов.
+- `spravochnik.xlsx` и `okved_mapping.csv` нужны для профиля и маппинга ОКВЭД.
+- `courses.current.csv` сидится как справочник курсов.
 
 Локально `catalog` импортирует demo plus current данные. В `APP_ENV=production`
 demo-меры отключаются, и импортируется только `measures.current.csv`.
@@ -176,12 +181,28 @@ PYTHONPATH=src UV_CACHE_DIR=.uv-cache uv run python -m navigator.infrastructure.
 PYTHONPATH=src UV_CACHE_DIR=.uv-cache uv run python -m navigator.infrastructure.data.import_measures --file data/measures.current.csv --validate-only
 ```
 
+Если в столбце `spheres` используются русские названия из базы мер, передайте
+справочник: `--category-catalog data/spravochnik.xlsx`. Значение `Любая`
+импортируется как пустое ограничение по сфере.
+
 ## Production deploy
 
-Production Compose запускается так:
+На отдельном сервере Production Compose запускается так:
 
 ```bash
 docker compose -f compose.yml -f compose.prod.yml up -d --build
+```
+
+### Обновление существующего VPS
+
+Сохраните серверные `.env`, оба Compose-файла и `docker/Caddyfile`, затем
+обновите только код бота и выполните:
+
+```bash
+cd /opt/hacaton_max_bot
+docker compose -f compose.yml -f compose.prod.yml build bot worker
+docker compose -f compose.yml -f compose.prod.yml up -d --no-deps --no-build --force-recreate bot worker
+curl -fsS https://83-217-202-54.sslip.io/health/ready
 ```
 
 `compose.prod.yml` включает webhook mode, Caddy, скрывает порты PostgreSQL/Redis
@@ -234,6 +255,93 @@ curl https://<domain>/health/ready
 ```bash
 make max-smoke
 ```
+
+## Сценарий проверки для организаторов
+
+Бот: `t223_hakaton_max_bot`, ссылка: `https://max.ru/t223_hakaton_max_bot`.
+
+1. Откройте бота MAX по ссылке из первого слайда презентации.
+2. Отправьте `/start`, нажмите `Начать`.
+3. Введите тестовый ИНН `7707049388`. Если внешний сервис ФНС временно
+   недоступен, нажмите `Заполнить вручную` и используйте профиль:
+   Москва, `ООО`, `IT и цифровые услуги`, `больше 3 лет`.
+   Численность можно уточнить в miniapp.
+4. Проверьте карточку профиля и нажмите `Да, всё верно`.
+5. Убедитесь, что бот показал 1-3 меры поддержки.
+6. Нажмите `Подробнее` на любой мере и проверьте документы, источник и срок.
+7. Нажмите `Добавить в чек-лист`, затем отправьте `/checklist` в чат.
+8. Если показано две меры, нажмите `Сравнить` и проверьте miniapp с двумя
+   колонками и отдельной кнопкой `Подробнее` у каждой меры.
+
+Тестовые данные лежат в `test-data/`. Для API miniapp нужен заголовок
+`X-Max-Init-Data`, который выдаёт MAX WebView; заранее зафиксировать рабочее
+значение нельзя без боевого `MAX_BOT_TOKEN`.
+
+## API для сдачи
+
+Miniapp использует собственный backend API, поэтому для проверки приложены:
+
+- `openapi.json` — OpenAPI 3.1, сгенерирован из FastAPI приложения;
+- `DATA-API.yaml` — краткая карта обязательных API-проверок;
+- `test-data/test-inn.csv` — тестовые ИНН и ожидаемое поведение;
+- `test-data/miniapp-requests.json` — примеры тел запросов;
+- `test-data/expected-behavior.json` — основной проверочный сценарий.
+
+Локальный base URL: `http://localhost:8000`. Публичный URL задаётся при
+развёртывании бота и не фиксируется в репозитории.
+
+## Данные
+
+Каталог мер в MVP — curated CSV, а не live-интеграция с МСП.РФ. ФНС/RMSP
+используется только для обогащения профиля по ИНН; если внешний сервис
+недоступен или компания не найдена, бот и miniapp должны позволять ручную
+анкету.
+
+## Остановка и перезапуск
+
+Локально:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+Production:
+
+```bash
+docker compose -f compose.yml -f compose.prod.yml down
+docker compose -f compose.yml -f compose.prod.yml up -d --build
+```
+
+Для обновления на текущем VPS с другими сайтами не используйте `down`, чтобы не
+ронять общий Caddy. Пересоберите только сервисы бота и worker командой из
+раздела "Обновление на VPS с другими сайтами".
+
+## Комплект сдачи
+
+- Бот MAX должен быть включен весь период проверки.
+- Username бота берётся через `GET https://platform-api2.max.ru/me` с боевым
+  `MAX_BOT_TOKEN`.
+- Репозиторий: `https://github.com/LaimOr127/HaK_Max_bot.git`.
+- Commit hash будет указан на первом слайде финальной презентации.
+- Зависимости: `pyproject.toml` и `uv.lock`.
+- Docker: `docker/bot.Dockerfile`, `docker/worker.Dockerfile`,
+  `docker/importer.Dockerfile`, `compose.yml`, `compose.prod.yml`,
+  `.dockerignore`, `.env.example`.
+- Презентация подготовлена в `output/pdf/submission-presentation.pdf`.
+  Первый слайд служебный, со второго начинается pitch-часть. Первый слайд
+  содержит ссылку на бота, прямую ссылку на miniapp
+  `https://max.ru/t223_hakaton_max_bot?startapp`, ссылку на репозиторий, HTTPS
+  URL backend API, тестовый ИНН `7707049388`, краткий сценарий выше и список
+  обязательных env без секретных значений.
+- Тестовая роль: `max_user` через обычный аккаунт MAX. Общего тестового пароля
+  нет; валидный signed init data создаётся MAX при открытии miniapp. Боевые
+  секреты передаются организаторам приватно и не коммитятся. Обязательные env:
+  `MAX_BOT_TOKEN`, `MAX_WEBHOOK_SECRET`, `DATABASE_URL`, `REDIS_URL`,
+  `MINIAPP_COMPARE_URL`.
+- Ссылку на miniapp/API нужно отправить организаторам через форму в личном
+  кабинете. URL формы в репозитории отсутствует, поэтому отправку нельзя
+  автоматизировать из кода.
 
 ## Ограничения
 

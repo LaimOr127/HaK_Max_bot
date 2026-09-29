@@ -10,7 +10,11 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from navigator.config import get_settings
-from navigator.infrastructure.data.import_measures import import_rows, load_csv
+from navigator.infrastructure.data.import_measures import (
+    import_rows,
+    load_csv,
+    load_sphere_catalog,
+)
 from navigator.infrastructure.db import models
 from navigator.infrastructure.db.session import create_session_factory
 
@@ -25,14 +29,21 @@ def repo_data_dir() -> Path:
 async def seed_demo(data_dir: Path | None = None) -> None:
     data_dir = data_dir or repo_data_dir()
     production = get_settings().app_env == "production"
-    measures, errors = load_csv(data_dir / "measures.example.csv") if not production else ([], [])
+    category_catalog, catalog_errors = load_sphere_catalog(data_dir / "spravochnik.xlsx")
+    if catalog_errors:
+        raise ValueError("\n".join(str(error) for error in catalog_errors))
+    measures, errors = (
+        load_csv(data_dir / "measures.example.csv", category_catalog=category_catalog)
+        if not production
+        else ([], [])
+    )
     if errors:
         raise ValueError("\n".join(str(error) for error in errors))
 
     session_factory = create_session_factory(get_settings())
     async with session_factory() as session:
         async with session.begin():
-            await _seed_spheres(session, data_dir / "sphere_categories.csv")
+            await _seed_spheres(session, category_catalog)
             await _seed_okved(session, data_dir / "okved_mapping.csv")
             if measures:
                 await import_rows(session, measures, is_demo=True)
@@ -50,24 +61,42 @@ async def seed_demo(data_dir: Path | None = None) -> None:
                     .where(models.Measure.is_demo.is_(True))
                     .values(is_active=False)
                 )
-            current_measures, current_errors = load_csv(data_dir / "measures.current.csv")
+            current_measures, current_errors = load_csv(
+                data_dir / "measures.current.csv", category_catalog=category_catalog
+            )
             if current_errors:
                 raise ValueError("\n".join(str(error) for error in current_errors))
             await import_rows(session, current_measures)
             await _seed_courses(session, data_dir / "courses.current.csv")
 
 
-async def _seed_spheres(session: AsyncSession, path: Path) -> None:
-    with path.open("r", encoding="utf-8-sig", newline="") as file:
-        for row in csv.DictReader(file):
-            sphere = await session.scalar(
-                select(models.SphereCategory).where(models.SphereCategory.code == row["code"])
-            )
-            if sphere is None:
-                sphere = models.SphereCategory(code=row["code"])
-                session.add(sphere)
-            sphere.name = row["name"]
-            sphere.is_active = row["is_active"].strip().lower() == "true"
+async def _seed_spheres(session: AsyncSession, catalog: dict[str, str]) -> None:
+    legacy_codes = {
+        "foodservice": "food",
+        "household_services": "household",
+        "it_digital": "it",
+        "construction_repair": "construction",
+        "beauty_health": "beauty",
+        "transport_logistics": "transport",
+    }
+    for name, code in catalog.items():
+        if code == "any":
+            continue
+        sphere = await session.scalar(
+            select(models.SphereCategory).where(models.SphereCategory.code == code)
+        )
+        if sphere is None:
+            legacy_code = next((old for old, new in legacy_codes.items() if new == code), None)
+            if legacy_code is not None:
+                sphere = await session.scalar(
+                    select(models.SphereCategory).where(models.SphereCategory.code == legacy_code)
+                )
+        if sphere is None:
+            sphere = models.SphereCategory(code=code)
+            session.add(sphere)
+        sphere.code = code
+        sphere.name = name
+        sphere.is_active = True
 
 
 async def _seed_okved(session: AsyncSession, path: Path) -> None:

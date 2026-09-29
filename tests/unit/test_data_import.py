@@ -1,7 +1,9 @@
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+from zipfile import ZipFile
 
-from navigator.infrastructure.data.import_measures import load_csv, parse_rows
+from navigator.infrastructure.data.import_measures import load_csv, load_sphere_catalog, parse_rows
 from navigator.infrastructure.data.seed import _expand_okved, repo_data_dir
 
 
@@ -11,7 +13,7 @@ def valid_row(**changes: str) -> dict[str, str]:
         "name": "Test measure",
         "support_level": "federal",
         "regions": "77|50",
-        "spheres": "retail|it_digital",
+        "spheres": "retail|it",
         "business_forms": "ip|ooo",
         "business_stages": "new|lt1",
         "msp_categories": "micro|small",
@@ -46,6 +48,32 @@ def test_parse_valid_measure_row() -> None:
     assert rows[0].regions == ("77", "50")
     assert rows[0].amount_max_rub == Decimal("100")
     assert rows[0].source_checked_at == date(2026, 9, 1)
+
+
+def test_category_catalog_maps_russian_labels_and_unrestricted_measures() -> None:
+    catalog, errors = load_sphere_catalog(repo_data_dir() / "spravochnik.xlsx")
+
+    assert errors == []
+    assert catalog["Общепит"] == "food"
+    assert catalog["Любая"] == "any"
+
+    rows, errors = parse_rows([valid_row(spheres="Общепит")], category_catalog=catalog)
+    assert errors == []
+    assert rows[0].spheres == ("food",)
+
+    rows, errors = parse_rows([valid_row(spheres="Любая")], category_catalog=catalog)
+    assert errors == []
+    assert rows[0].spheres == ()
+
+
+def test_category_catalog_rejects_xml_entities(tmp_path: Path) -> None:
+    path = tmp_path / "unsafe.xlsx"
+    with ZipFile(path, "w") as workbook:
+        workbook.writestr("xl/sharedStrings.xml", "<!DOCTYPE x [<!ENTITY x 'bad'>]><x>&x;</x>")
+
+    _, errors = load_sphere_catalog(path)
+
+    assert "unsafe xlsx XML" in str(errors[0])
 
 
 def test_parse_reports_validation_errors_with_row_and_column() -> None:

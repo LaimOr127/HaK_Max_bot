@@ -680,13 +680,13 @@ def _callback_summary(callback: Callback) -> str:
     labels = {
         "business_form": {"ip": "ИП", "ooo": "ООО", "self_employed": "Самозанятый"},
         "sphere": {
-            "foodservice": "Общепит", "retail": "Розничная торговля",
-            "household_services": "Бытовые услуги", "professional": "Деловые услуги",
-            "it_digital": "IT и цифровые услуги", "manufacturing": "Производство",
-            "construction_repair": "Строительство и ремонт",
-            "beauty_health": "Красота", "health": "Здоровье и медицина",
+            "food": "Общепит", "retail": "Розничная торговля",
+            "household": "Бытовые услуги", "professional": "Деловые услуги",
+            "it": "IT и цифровые услуги", "manufacturing": "Производство",
+            "construction": "Строительство и ремонт",
+            "beauty": "Красота", "health": "Здоровье и медицина",
             "education": "Образование", "tourism": "Туризм",
-            "transport_logistics": "Транспорт и логистика", "other": "Прочее",
+            "transport": "Транспорт и логистика", "other": "Прочее",
         },
         "stage": {
             "new": "Только открылись", "lt1": "До 1 года",

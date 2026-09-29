@@ -495,7 +495,7 @@
 
 <div class="toast" id="toast" hidden></div>
 
-<script src="https://st.max.ru/js/max-web-app.js" async></script>
+<script src="https://st.max.ru/js/max-web-app.js" defer></script>
 <script>
 (() => {
   const api = {
@@ -564,8 +564,21 @@
     return { "X-Max-Init-Data": initData };
   }
 
+  async function request(url, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    try {
+      return await window.fetch(url, { ...options, signal: controller.signal });
+    } catch (error) {
+      if (error && error.name === "AbortError") throw new Error("Сервер не отвечает");
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function post(url, body) {
-    const res = await fetch(url, {
+    const res = await request(url, {
       method: "POST",
       headers: { ...headers(), "Content-Type": "application/json" },
       body: JSON.stringify(body || {})
@@ -615,7 +628,7 @@
     showLoading();
     try {
       const url = `${api.compare}?ids=${encodeURIComponent(ids.join(","))}`;
-      const res = await fetch(url, { headers: headers() });
+      const res = await request(url, { headers: headers() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       measures = Array.isArray(data.measures) ? data.measures.slice(0, 2) : [];
@@ -640,7 +653,7 @@
     showLoading();
     document.querySelector("h1").textContent = "Навигатор льгот";
     try {
-      const res = await fetch(api.home, { headers: headers() });
+      const res = await request(api.home, { headers: headers() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       homeData = await res.json();
       profile = homeData.profile;
@@ -653,12 +666,12 @@
   }
 
   const SPHERES = [
-    ["foodservice", "Общепит"], ["retail", "Розничная торговля"],
-    ["household_services", "Бытовые услуги"], ["professional", "Деловые услуги"],
-    ["it_digital", "IT и цифровые услуги"], ["manufacturing", "Производство"],
-    ["construction_repair", "Строительство и ремонт"], ["beauty_health", "Красота"],
+    ["food", "Общепит"], ["retail", "Розничная торговля"],
+    ["household", "Бытовые услуги"], ["professional", "Деловые услуги"],
+    ["it", "IT и цифровые услуги"], ["manufacturing", "Производство"],
+    ["construction", "Строительство и ремонт"], ["beauty", "Красота"],
     ["health", "Здоровье и медицина"], ["education", "Образование"],
-    ["transport_logistics", "Транспорт и логистика"], ["tourism", "Туризм"], ["other", "Другое"]
+    ["transport", "Транспорт и логистика"], ["tourism", "Туризм"], ["other", "Другое"]
   ];
   const FORMS = [["ip", "ИП"], ["ooo", "ООО"], ["self_employed", "Самозанятый"]];
   const STAGES = [["new", "Только открываюсь"], ["lt1", "Меньше года"], ["1_3", "От 1 до 3 лет"], ["gt3", "Больше 3 лет"]];
@@ -734,7 +747,7 @@
 
   async function openDetail(id) {
     try {
-      const res = await fetch(api.detail(id), { headers: headers() });
+      const res = await request(api.detail(id), { headers: headers() });
       if (!res.ok) throw new Error(`Ошибка ${res.status}`);
       activeDetail = await res.json();
       detailRemoveConfirm = false;
@@ -818,13 +831,13 @@
     if ((action === "detail-toggle" || action === "detail-remove-yes") && activeDetail) {
       const wasChecked = activeDetail.checklisted;
       try {
-        const res = await fetch(api.checklist(activeDetail.id), { method: wasChecked ? "DELETE" : "POST", headers: headers() });
+        const res = await request(api.checklist(activeDetail.id), { method: wasChecked ? "DELETE" : "POST", headers: headers() });
         if (!res.ok) throw new Error(`Ошибка ${res.status}`);
         activeDetail.checklisted = !wasChecked;
         detailRemoveConfirm = false;
         renderSingleDetail();
         showToast(wasChecked ? "Убрано из чек-листа" : "Добавлено в чек-лист");
-        const homeRes = await fetch(api.home, { headers: headers() });
+        const homeRes = await request(api.home, { headers: headers() });
         if (homeRes.ok) homeData = await homeRes.json();
       } catch (err) { showToast("Не удалось обновить чек-лист."); }
     }
@@ -851,7 +864,7 @@
       btn.addEventListener("click", async () => {
         btn.disabled = true;
         try {
-          const res = await fetch(api.remove(btn.dataset.remove), { method: "POST", headers: headers() });
+          const res = await request(api.remove(btn.dataset.remove), { method: "POST", headers: headers() });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
         } catch (err) {
           btn.disabled = false;
@@ -962,7 +975,7 @@
     renderCompare();
     if (!detailsEl.hidden) renderDetails(id, false);
     try {
-      const res = await fetch(api.checklist(id), {
+      const res = await request(api.checklist(id), {
         method: wasChecklisted ? "DELETE" : "POST",
         headers: headers()
       });
@@ -1031,12 +1044,16 @@
 
   async function boot() {
     showLoading();
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      readInitData();
-      if (initData) break;
-      await new Promise(resolve => setTimeout(resolve, 150));
+    try {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        readInitData();
+        if (initData) break;
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+      await loadCompare();
+    } catch (error) {
+      showState("Не удалось открыть приложение", "Закройте окно и запустите мини-приложение из чата ещё раз.");
     }
-    await loadCompare();
   }
 
   if (document.readyState === "loading") {

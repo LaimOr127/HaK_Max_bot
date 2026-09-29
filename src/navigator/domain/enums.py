@@ -24,17 +24,17 @@ class EmployeeBucket(StrEnum):
 
 
 class SphereCategory(StrEnum):
-    FOODSERVICE = "foodservice"
+    FOODSERVICE = "food"
     RETAIL = "retail"
-    HOUSEHOLD_SERVICES = "household_services"
+    HOUSEHOLD_SERVICES = "household"
     PROFESSIONAL = "professional"
-    IT_DIGITAL = "it_digital"
+    IT_DIGITAL = "it"
     MANUFACTURING = "manufacturing"
-    CONSTRUCTION_REPAIR = "construction_repair"
-    BEAUTY_HEALTH = "beauty_health"
+    CONSTRUCTION_REPAIR = "construction"
+    BEAUTY_HEALTH = "beauty"
     HEALTH = "health"
     EDUCATION = "education"
-    TRANSPORT_LOGISTICS = "transport_logistics"
+    TRANSPORT_LOGISTICS = "transport"
     TOURISM = "tourism"
     OTHER = "other"
 

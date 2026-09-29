@@ -176,7 +176,7 @@ async def test_manual_onboarding_collects_fields_and_saves_profile() -> None:
     await dispatcher.handle_callback(CallbackInteraction(42, "inn:manual"))
     await dispatcher.handle_text(TextInteraction(42, "Москва"))
     await dispatcher.handle_callback(CallbackInteraction(42, "business_form:ip"))
-    await dispatcher.handle_callback(CallbackInteraction(42, "sphere:it_digital"))
+    await dispatcher.handle_callback(CallbackInteraction(42, "sphere:it"))
     await dispatcher.handle_callback(CallbackInteraction(42, "stage:lt1"))
     result = await dispatcher.handle_callback(CallbackInteraction(42, "employees:2_15"))
 
@@ -192,7 +192,7 @@ async def test_confirm_profile_returns_recommendation_card() -> None:
     await dispatcher.handle_callback(CallbackInteraction(42, "inn:manual"))
     await dispatcher.handle_text(TextInteraction(42, "Москва"))
     await dispatcher.handle_callback(CallbackInteraction(42, "business_form:ip"))
-    await dispatcher.handle_callback(CallbackInteraction(42, "sphere:it_digital"))
+    await dispatcher.handle_callback(CallbackInteraction(42, "sphere:it"))
     await dispatcher.handle_callback(CallbackInteraction(42, "stage:lt1"))
     await dispatcher.handle_callback(CallbackInteraction(42, "employees:2_15"))
     result = await dispatcher.handle_callback(CallbackInteraction(42, "profile:confirm"))

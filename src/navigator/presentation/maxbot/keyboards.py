@@ -54,16 +54,16 @@ BUSINESS_FORM = inline_keyboard(
 )
 SPHERE = inline_keyboard(
     [
-        [("Общепит", "sphere:foodservice"), ("Розничная торговля", "sphere:retail")],
+        [("Общепит", "sphere:food"), ("Розничная торговля", "sphere:retail")],
         [
-            ("Бытовые услуги", "sphere:household_services"),
+            ("Бытовые услуги", "sphere:household"),
             ("Деловые услуги", "sphere:professional"),
         ],
-        [("IT и цифровые услуги", "sphere:it_digital"), ("Производство", "sphere:manufacturing")],
-        [("Строительство и ремонт", "sphere:construction_repair")],
-        [("Красота", "sphere:beauty_health"), ("Здоровье и медицина", "sphere:health")],
+        [("IT и цифровые услуги", "sphere:it"), ("Производство", "sphere:manufacturing")],
+        [("Строительство и ремонт", "sphere:construction")],
+        [("Красота", "sphere:beauty"), ("Здоровье и медицина", "sphere:health")],
         [("Образование", "sphere:education"), ("Туризм", "sphere:tourism")],
-        [("Транспорт и логистика", "sphere:transport_logistics"), ("Прочее", "sphere:other")],
+        [("Транспорт и логистика", "sphere:transport"), ("Прочее", "sphere:other")],
         [("Назад", "profile:back")],
     ]
 )

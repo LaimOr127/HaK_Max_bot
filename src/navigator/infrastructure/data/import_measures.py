@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import zipfile
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -10,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import UUID
+from xml.etree import ElementTree
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +28,7 @@ from navigator.infrastructure.db import models
 from navigator.infrastructure.db.session import create_session_factory
 
 ARRAY_SEP = "|"
+SPREADSHEET_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 REQUIRED_COLUMNS = (
     "external_code",
     "name",
@@ -97,7 +100,58 @@ class MeasureRow:
     priority: int
 
 
-def load_csv(path: Path) -> tuple[list[MeasureRow], list[CsvError]]:
+def load_sphere_catalog(path: Path) -> tuple[dict[str, str], list[CsvError]]:
+    """Read the analyst-maintained category dictionary without an Excel dependency."""
+    if not path.is_file():
+        return {}, [CsvError(0, "category_catalog", f"not a file: {path}")]
+    try:
+        with zipfile.ZipFile(path) as workbook:
+            shared_strings = _shared_strings(workbook)
+            sheet = _xlsx_xml(workbook, "xl/worksheets/sheet1.xml")
+    except (KeyError, OSError, ValueError, zipfile.BadZipFile, ElementTree.ParseError) as exc:
+        return {}, [CsvError(0, "category_catalog", f"invalid xlsx: {exc}")]
+
+    rows = [
+        [_xlsx_cell_value(cell, shared_strings) for cell in row]
+        for row in sheet.iter(f"{SPREADSHEET_NS}row")
+    ]
+    if not rows or rows[0] != ["Категория (как в Таблице 1)", "Код (как в Таблице 2 )"]:
+        return {}, [CsvError(1, "category_catalog", "unexpected headers")]
+
+    catalog = {name: code for name, code in rows[1:] if name and code}
+    if not catalog or len(catalog) != len(rows) - 1:
+        return {}, [CsvError(0, "category_catalog", "empty category or code")]
+    if len(set(catalog.values())) != len(catalog):
+        return {}, [CsvError(0, "category_catalog", "duplicate category code")]
+    return catalog, []
+
+
+def _shared_strings(workbook: zipfile.ZipFile) -> list[str]:
+    root = _xlsx_xml(workbook, "xl/sharedStrings.xml")
+    return ["".join(item.itertext()) for item in root.iter(f"{SPREADSHEET_NS}si")]
+
+
+def _xlsx_xml(workbook: zipfile.ZipFile, name: str) -> ElementTree.Element:
+    info = workbook.getinfo(name)
+    if info.file_size > 2_000_000:
+        raise ValueError(f"oversized xlsx part: {name}")
+    payload = workbook.read(info)
+    upper = payload.upper()
+    if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
+        raise ValueError(f"unsafe xlsx XML: {name}")
+    return ElementTree.fromstring(payload)  # noqa: S314 -- DTD/entities rejected above
+
+
+def _xlsx_cell_value(cell: ElementTree.Element, shared_strings: Sequence[str]) -> str:
+    value = cell.findtext(f"{SPREADSHEET_NS}v", default="")
+    if cell.get("t") == "s":
+        return shared_strings[int(value)]
+    return value
+
+
+def load_csv(
+    path: Path, *, category_catalog: Mapping[str, str] | None = None
+) -> tuple[list[MeasureRow], list[CsvError]]:
     if not path.is_file():
         return [], [CsvError(0, "file", f"not a file: {path}")]
     with path.open("r", encoding="utf-8-sig", newline="") as file:
@@ -105,15 +159,17 @@ def load_csv(path: Path) -> tuple[list[MeasureRow], list[CsvError]]:
         missing = [column for column in REQUIRED_COLUMNS if column not in (reader.fieldnames or [])]
         if missing:
             return [], [CsvError(1, "header", f"missing columns: {', '.join(missing)}")]
-        return parse_rows(reader)
+        return parse_rows(reader, category_catalog=category_catalog)
 
 
-def parse_rows(rows: Iterable[dict[str, str]]) -> tuple[list[MeasureRow], list[CsvError]]:
+def parse_rows(
+    rows: Iterable[dict[str, str]], *, category_catalog: Mapping[str, str] | None = None
+) -> tuple[list[MeasureRow], list[CsvError]]:
     parsed: list[MeasureRow] = []
     errors: list[CsvError] = []
     seen_codes: set[str] = set()
     for row_number, raw in enumerate(rows, start=2):
-        row, row_errors = _parse_row(row_number, raw)
+        row, row_errors = _parse_row(row_number, raw, category_catalog)
         code = raw.get("external_code", "").strip()
         if code and code in seen_codes:
             row_errors.append(CsvError(row_number, "external_code", "duplicate value in file"))
@@ -125,14 +181,16 @@ def parse_rows(rows: Iterable[dict[str, str]]) -> tuple[list[MeasureRow], list[C
     return parsed, errors
 
 
-def _parse_row(row_number: int, raw: dict[str, str]) -> tuple[MeasureRow | None, list[CsvError]]:
+def _parse_row(
+    row_number: int, raw: dict[str, str], category_catalog: Mapping[str, str] | None
+) -> tuple[MeasureRow | None, list[CsvError]]:
     errors: list[CsvError] = []
 
     external_code = _required(raw, row_number, "external_code", errors)
     name = _required(raw, row_number, "name", errors)
     support_level = _enum(raw, row_number, "support_level", SupportLevel, errors)
     regions = _regions(raw, row_number, errors)
-    spheres = _enum_list(raw, row_number, "spheres", SphereCategory, errors)
+    spheres = _spheres(raw, row_number, category_catalog, errors)
     business_forms = _enum_list(raw, row_number, "business_forms", BusinessForm, errors)
     business_stages = _enum_list(raw, row_number, "business_stages", BusinessStage, errors)
     msp_categories = _enum_list(raw, row_number, "msp_categories", MspCategory, errors)
@@ -238,8 +296,14 @@ async def import_rows(
         await _replace_measure_children(session, measure.id, row, sphere_ids)
 
 
-async def import_file(path: Path, *, validate_only: bool, is_demo: bool = False) -> list[CsvError]:
-    rows, errors = load_csv(path)
+async def import_file(
+    path: Path,
+    *,
+    validate_only: bool,
+    is_demo: bool = False,
+    category_catalog: Mapping[str, str] | None = None,
+) -> list[CsvError]:
+    rows, errors = load_csv(path, category_catalog=category_catalog)
     if errors or validate_only:
         return errors
 
@@ -362,6 +426,25 @@ def _enum_list(
     return values
 
 
+def _spheres(
+    raw: dict[str, str],
+    row: int,
+    category_catalog: Mapping[str, str] | None,
+    errors: list[CsvError],
+) -> tuple[str, ...]:
+    values = _split(raw.get("spheres", ""))
+    if category_catalog:
+        values = tuple(category_catalog.get(value, value) for value in values)
+    if "any" in values:
+        if len(values) != 1:
+            errors.append(CsvError(row, "spheres", "'any' cannot be combined with a category"))
+        return ()
+    for value in values:
+        if value not in SphereCategory:
+            errors.append(CsvError(row, "spheres", f"unknown value {value!r}"))
+    return values
+
+
 def _regions(raw: dict[str, str], row: int, errors: list[CsvError]) -> tuple[str, ...]:
     values = _split(raw.get("regions", ""))
     for value in values:
@@ -429,12 +512,22 @@ def _document_code(title: str) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--file", type=Path, required=True)
+    parser.add_argument("--category-catalog", type=Path)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--validate-only", action="store_true")
     mode.add_argument("--apply", action="store_true")
     args = parser.parse_args(argv)
 
-    errors = asyncio.run(import_file(args.file, validate_only=args.validate_only))
+    category_catalog = None
+    if args.category_catalog is not None:
+        category_catalog, catalog_errors = load_sphere_catalog(args.category_catalog)
+        if catalog_errors:
+            for error in catalog_errors:
+                print(error)
+            return 1
+    errors = asyncio.run(
+        import_file(args.file, validate_only=args.validate_only, category_catalog=category_catalog)
+    )
     for error in errors:
         print(error)
     return 1 if errors else 0
